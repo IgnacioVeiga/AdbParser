@@ -124,7 +124,7 @@ public static class FfmpegLoader
 
         // Nothing usable found => give an actionable error.
         throw new InvalidOperationException(
-            "Native FFmpeg libraries not found (libavcodec, libavformat, libavutil).\n" +
+            "Native FFmpeg libraries not found (libavcodec, libavutil, libswscale).\n" +
             "Paths checked: " + string.Join(", ", tried.Take(20)) + "\n" +
             "Solution: Install FFmpeg on your system (e.g. 'sudo apt install ffmpeg libavcodec-dev' on Debian/Ubuntu) " +
             "or set the FFMPEG_ROOT environment variable pointing to the directory containing the libraries.");
@@ -137,40 +137,66 @@ public static class FfmpegLoader
             if (!Directory.Exists(dir))
                 return false;
 
-            string[] patterns;
+            string[][] requiredPatterns;
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                patterns = ["avcodec-*.dll", "libavcodec-*.dll", "avcodec*.dll"];
+            {
+                requiredPatterns =
+                [
+                    ["avcodec-*.dll", "libavcodec-*.dll", "avcodec*.dll"],
+                    ["avutil-*.dll", "libavutil-*.dll", "avutil*.dll"],
+                    ["swscale-*.dll", "libswscale-*.dll", "swscale*.dll"]
+                ];
+            }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                patterns = ["libavcodec*.dylib"];
+            {
+                requiredPatterns =
+                [
+                    ["libavcodec*.dylib"],
+                    ["libavutil*.dylib"],
+                    ["libswscale*.dylib"]
+                ];
+            }
             else
-                patterns = ["libavcodec*.so*", "avcodec*.so*"];
-
-            foreach (var p in patterns)
             {
-                foreach (var file in Directory.EnumerateFiles(dir, p, SearchOption.TopDirectoryOnly))
+                requiredPatterns =
+                [
+                    ["libavcodec*.so*", "avcodec*.so*"],
+                    ["libavutil*.so*", "avutil*.so*"],
+                    ["libswscale*.so*", "swscale*.so*"]
+                ];
+            }
+
+            foreach (var patterns in requiredPatterns)
+            {
+                bool loaded = false;
+                foreach (var pattern in patterns)
                 {
-                    tried.Add(file);
-                    try
+                    foreach (var file in Directory.EnumerateFiles(dir, pattern, SearchOption.TopDirectoryOnly))
                     {
-                        if (NativeLibrary.TryLoad(file, out var handle))
+                        tried.Add(file);
+                        try
                         {
-                            NativeLibrary.Free(handle);
-                            return true;
+                            if (NativeLibrary.TryLoad(file, out var handle))
+                            {
+                                NativeLibrary.Free(handle);
+                                loaded = true;
+                                break;
+                            }
                         }
+                        catch (DllNotFoundException) { }
+                        catch (BadImageFormatException) { }
+                        catch { }
                     }
-                    catch (DllNotFoundException) { }
-                    catch (BadImageFormatException) { }
-                    catch { }
+
+                    if (loaded)
+                        break;
                 }
+
+                if (!loaded)
+                    return false;
             }
 
-            // also accept bin folders that contain ffmpeg executable (best-effort)
-            var exe = Path.Combine(dir, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "ffmpeg.exe" : "ffmpeg");
-            if (File.Exists(exe))
-            {
-                tried.Add(exe);
-                return true;
-            }
+            return true;
         }
         catch { }
         return false;
