@@ -1,22 +1,123 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="AdbParser.Gui.MainWindow"
-        Width="400"
-        Height="300"
+        Width="1100"
+        Height="720"
+        MinWidth="860"
+        MinHeight="560"
         Title="ADB Screen Test">
 
-  <Grid>
-    <Image x:Name="ScreenImage"
-           Stretch="Uniform"/>
-           <TextBlock x:Name="StatusText"
-                      Text="Status: Disconnected"
-                      VerticalAlignment="Bottom"
-                      HorizontalAlignment="Center"
-                      Margin="0,0,0,10"
-                      Foreground="White"
-                      Background="Black"
-                      Opacity="0.7"
-                      Padding="5"/>
+  <Grid RowDefinitions="Auto,*,Auto"
+        Background="#0F141A">
+    <Border Grid.Row="0"
+            Background="#18212B"
+            BorderBrush="#2A3947"
+            BorderThickness="0,0,0,1"
+            Padding="12">
+      <Grid RowDefinitions="Auto,Auto"
+            RowSpacing="8"
+            ColumnDefinitions="Auto,170,Auto,150,Auto,130,Auto,Auto,Auto,*"
+            ColumnSpacing="8">
+        <TextBlock Grid.Row="0"
+                   Grid.Column="0"
+                   VerticalAlignment="Center"
+                   Text="Resolution"
+                   Foreground="#D9E2EC"/>
+        <ComboBox x:Name="ResolutionCombo"
+                  Grid.Row="0"
+                  Grid.Column="1"
+                  MinWidth="150"/>
+
+        <TextBlock Grid.Row="0"
+                   Grid.Column="2"
+                   VerticalAlignment="Center"
+                   Text="Bitrate"
+                   Foreground="#D9E2EC"/>
+        <ComboBox x:Name="BitrateCombo"
+                  Grid.Row="0"
+                  Grid.Column="3"
+                  MinWidth="130"/>
+
+        <TextBlock Grid.Row="0"
+                   Grid.Column="4"
+                   VerticalAlignment="Center"
+                   Text="Render FPS"
+                   Foreground="#D9E2EC"/>
+        <ComboBox x:Name="RenderFpsCombo"
+                  Grid.Row="0"
+                  Grid.Column="5"
+                  MinWidth="110"/>
+
+        <Button x:Name="StartButton"
+                Grid.Row="0"
+                Grid.Column="6"
+                Content="Start"
+                MinWidth="80"/>
+        <Button x:Name="StopButton"
+                Grid.Row="0"
+                Grid.Column="7"
+                Content="Stop"
+                MinWidth="80"/>
+        <Button x:Name="ReconnectButton"
+                Grid.Row="0"
+                Grid.Column="8"
+                Content="Reconnect"
+                MinWidth="100"/>
+
+        <TextBlock x:Name="StatsText"
+                   Grid.Row="1"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="10"
+                   Text="Decoded: 0 (0.0 fps) | Rendered: 0 (0.0 fps) | Frame: n/a | Render cap: Unlimited"
+                   Foreground="#AFC2D4"
+                   TextTrimming="CharacterEllipsis"/>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1"
+            Margin="12"
+            Background="#090C10"
+            BorderBrush="#2A3947"
+            BorderThickness="1"
+            CornerRadius="10"
+            ClipToBounds="True">
+      <Grid>
+        <Image x:Name="ScreenImage"
+               Stretch="Uniform"/>
+
+        <Border HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="12"
+                Background="#B2141A21"
+                CornerRadius="8"
+                Padding="8,4">
+          <TextBlock x:Name="FrameInfoText"
+                     Text="No frame yet"
+                     Foreground="#EAF2F8"/>
+        </Border>
+
+        <Border HorizontalAlignment="Left"
+                VerticalAlignment="Bottom"
+                Margin="12"
+                Background="#B2141A21"
+                CornerRadius="8"
+                Padding="8,4">
+          <TextBlock x:Name="StatusText"
+                     Text="Status: Disconnected"
+                     Foreground="#EAF2F8"/>
+        </Border>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="2"
+            Background="#121A22"
+            BorderBrush="#2A3947"
+            BorderThickness="0,1,0,0"
+            Padding="12,8">
+      <TextBlock x:Name="FooterText"
+                 Text="Settings apply on Start/Reconnect. Use lower bitrate or resolution if latency is high."
+                 Foreground="#9EB3C7"/>
+    </Border>
   </Grid>
 
 </Window>
