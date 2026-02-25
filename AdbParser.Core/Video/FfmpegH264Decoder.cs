@@ -21,6 +21,7 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
     private byte[]? _frameBuffer;
     private int _frameWidth;
     private int _frameHeight;
+    private AVPixelFormat _frameSourceFormat;
     private bool _initialized;
 
     public FfmpegH264Decoder()
@@ -277,7 +278,11 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
 
     private void EnsureConversionResources(int width, int height, AVPixelFormat sourceFormat)
     {
-        if (_swsContext != null && _frameBuffer != null && _frameWidth == width && _frameHeight == height)
+        if (_swsContext != null &&
+            _frameBuffer != null &&
+            _frameWidth == width &&
+            _frameHeight == height &&
+            _frameSourceFormat == sourceFormat)
         {
             return;
         }
@@ -308,6 +313,7 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
 
         _frameWidth = width;
         _frameHeight = height;
+        _frameSourceFormat = sourceFormat;
         int bufferSize = ffmpeg.av_image_get_buffer_size(AVPixelFormat.AV_PIX_FMT_BGRA, width, height, 1);
         _frameBuffer = new byte[bufferSize];
     }
