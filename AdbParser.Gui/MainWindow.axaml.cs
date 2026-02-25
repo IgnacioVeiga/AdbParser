@@ -14,8 +14,9 @@ public partial class MainWindow : Window
 {
     private WriteableBitmap? _bitmap;
     private int _frameCount;
-
     private CancellationTokenSource? _cts;
+    private Task? _producerTask;
+    private Task? _consumerTask;
 
     public MainWindow()
     {
@@ -26,18 +27,32 @@ public partial class MainWindow : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        var decoder = new FfmpegH264Decoder();
-        var service = new AdbScreenStreamService(decoder);
+        SetStatus("Initializing FFmpeg...");
+
+        FfmpegH264Decoder decoder;
+        AdbScreenStreamService service;
+        try
+        {
+            decoder = new FfmpegH264Decoder();
+            service = new AdbScreenStreamService(decoder);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"FFmpeg error: {FirstLine(ex.Message)}");
+            Title = "ADB Screen Test - Error";
+            return;
+        }
 
         var buffer = new VideoFrameBuffer();
 
         _cts = new CancellationTokenSource();
         var options = new ScreenStreamOptions();
+        SetStatus("Streaming...");
 
         // =========================
         // PRODUCER: ADB + decoder
         // =========================
-        _ = Task.Run(async () =>
+        _producerTask = Task.Run(async () =>
         {
             try
             {
@@ -50,12 +65,22 @@ public partial class MainWindow : Window
             {
                 // This is expected when the operation is canceled.
             }
+            catch (Exception ex)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    SetStatus($"Stream error: {FirstLine(ex.Message)}"));
+                _cts.Cancel();
+            }
+            finally
+            {
+                decoder.Dispose();
+            }
         });
 
         // =========================
         // CONSUMER: render loop
         // =========================
-        _ = Task.Run(async () =>
+        _consumerTask = Task.Run(async () =>
         {
             var frameInterval = TimeSpan.FromMilliseconds(33); // ~30 FPS
 
@@ -77,12 +102,19 @@ public partial class MainWindow : Window
                 }
             }
             catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    SetStatus($"Render error: {FirstLine(ex.Message)}"));
+                _cts.Cancel();
+            }
         });
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
         _cts?.Cancel();
+        SetStatus("Stopped");
     }
 
     private void EnsureBitmap(VideoFrame frame)
@@ -127,5 +159,19 @@ public partial class MainWindow : Window
         }
 
         ScreenImage.InvalidateVisual();
+    }
+
+    private void SetStatus(string text)
+    {
+        StatusText.Text = $"Status: {text}";
+    }
+
+    private static string FirstLine(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "Unknown error";
+
+        var newlineIndex = text.IndexOfAny(['\r', '\n']);
+        return newlineIndex >= 0 ? text[..newlineIndex] : text;
     }
 }
