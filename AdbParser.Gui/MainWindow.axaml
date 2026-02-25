@@ -5,9 +5,10 @@
         Height="860"
         MinWidth="980"
         MinHeight="680"
-        Title="ADB Screen Test">
+        Title="ADB Screen Test"
+        FontSize="13">
 
-  <Grid RowDefinitions="Auto,*,8,220,Auto"
+  <Grid RowDefinitions="Auto,*,8,240,Auto"
         Background="#0E141C">
     <Border Grid.Row="0"
             Background="#161F2A"
@@ -30,7 +31,8 @@
                   RowSpacing="8">
               <TextBlock Text="Target Device"
                          Foreground="#DCE7F3"
-                         FontWeight="SemiBold"/>
+                         FontWeight="SemiBold"
+                         FontSize="12"/>
               <Grid Grid.Row="1"
                     ColumnDefinitions="*,Auto"
                     ColumnSpacing="8">
@@ -55,7 +57,8 @@
                   RowSpacing="8">
               <TextBlock Text="Mirror Settings"
                          Foreground="#DCE7F3"
-                         FontWeight="SemiBold"/>
+                         FontWeight="SemiBold"
+                         FontSize="12"/>
               <Grid Grid.Row="1"
                     ColumnDefinitions="*,*,*"
                     ColumnSpacing="8">
@@ -93,7 +96,8 @@
                   RowSpacing="8">
               <TextBlock Text="Mirror Session"
                          Foreground="#DCE7F3"
-                         FontWeight="SemiBold"/>
+                         FontWeight="SemiBold"
+                         FontSize="12"/>
               <StackPanel Grid.Row="1"
                           Orientation="Horizontal"
                           Spacing="8">
@@ -131,7 +135,7 @@
 
     <Grid Grid.Row="1"
           Margin="12,12,12,0"
-          ColumnDefinitions="430,8,*">
+          ColumnDefinitions="410,8,*">
       <Border Grid.Column="0"
               Background="#101722"
               BorderBrush="#273644"
@@ -141,23 +145,17 @@
         <Grid RowDefinitions="Auto,*,Auto"
               RowSpacing="10">
           <Grid Grid.Row="0"
-                ColumnDefinitions="*,Auto"
-                ColumnSpacing="8">
+                ColumnDefinitions="*">
             <StackPanel Spacing="2">
               <TextBlock Text="ADB Toolbox"
                          Foreground="#E7EFF8"
-                         FontSize="18"
+                         FontSize="16"
                          FontWeight="SemiBold"/>
               <TextBlock Text="Run common commands and inspect device state without leaving the GUI."
                          Foreground="#9EB3C7"
-                         FontSize="12"
+                         FontSize="11"
                          TextWrapping="Wrap"/>
             </StackPanel>
-            <Button x:Name="ClearOutputButton"
-                    Grid.Column="1"
-                    Content="Clear log"
-                    MinWidth="88"
-                    VerticalAlignment="Top"/>
           </Grid>
 
           <TabControl Grid.Row="1"
@@ -210,24 +208,6 @@
                   <Button x:Name="ActivityStackButton" Content="Activities" Margin="0,0,8,8"/>
                   <Button x:Name="ProcessesButton" Content="Processes" Margin="0,0,8,8"/>
                   <Button x:Name="StorageButton" Content="Storage" Margin="0,0,8,8"/>
-                </WrapPanel>
-              </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="Input">
-              <ScrollViewer Margin="4">
-                <WrapPanel Margin="8"
-                           Orientation="Horizontal"
-                           ItemWidth="136"
-                           ItemHeight="36">
-                  <Button x:Name="HomeButton" Content="Home" Margin="0,0,8,8"/>
-                  <Button x:Name="BackButton" Content="Back" Margin="0,0,8,8"/>
-                  <Button x:Name="RecentsButton" Content="Recents" Margin="0,0,8,8"/>
-                  <Button x:Name="PowerButton" Content="Power" Margin="0,0,8,8"/>
-                  <Button x:Name="VolUpButton" Content="Volume +" Margin="0,0,8,8"/>
-                  <Button x:Name="VolDownButton" Content="Volume -" Margin="0,0,8,8"/>
-                  <Button x:Name="NotificationsButton" Content="Notifications" Margin="0,0,8,8"/>
-                  <Button x:Name="QuickSettingsButton" Content="Quick Settings" Margin="0,0,8,8"/>
                 </WrapPanel>
               </ScrollViewer>
             </TabItem>
@@ -303,7 +283,95 @@
             <TextBlock Text="Preview area&#10;Start mirror to display the selected device screen"
                        TextAlignment="Center"
                        Foreground="#AFC2D4"
-                       FontSize="14"/>
+                       FontSize="13"/>
+          </Border>
+
+          <Border HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Margin="0,0,12,0"
+                  Background="#B8141A21"
+                  BorderBrush="#2A3947"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="8">
+            <StackPanel Spacing="8">
+              <TextBlock Text="INPUT"
+                         Foreground="#9EB3C7"
+                         FontSize="10"
+                         HorizontalAlignment="Center"/>
+
+              <Grid ColumnDefinitions="Auto,Auto"
+                    ColumnSpacing="6"
+                    RowDefinitions="Auto,Auto,Auto,Auto">
+                <Button x:Name="PowerButton"
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Content="⏻"
+                        Width="36"
+                        Height="36"
+                        FontSize="15"
+                        ToolTip.Tip="Power"/>
+                <Button x:Name="NotificationsButton"
+                        Grid.Row="0"
+                        Grid.Column="1"
+                        Content="☰"
+                        Width="36"
+                        Height="36"
+                        FontSize="15"
+                        ToolTip.Tip="Notifications"/>
+
+                <Button x:Name="HomeButton"
+                        Grid.Row="1"
+                        Grid.Column="0"
+                        Content="⌂"
+                        Width="36"
+                        Height="36"
+                        FontSize="16"
+                        ToolTip.Tip="Home"/>
+                <Button x:Name="BackButton"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Content="←"
+                        Width="36"
+                        Height="36"
+                        FontSize="16"
+                        ToolTip.Tip="Back"/>
+
+                <Button x:Name="RecentsButton"
+                        Grid.Row="2"
+                        Grid.Column="0"
+                        Content="▢"
+                        Width="36"
+                        Height="36"
+                        FontSize="15"
+                        ToolTip.Tip="Recents"/>
+                <Button x:Name="QuickSettingsButton"
+                        Grid.Row="2"
+                        Grid.Column="1"
+                        Content="⚙"
+                        Width="36"
+                        Height="36"
+                        FontSize="15"
+                        ToolTip.Tip="Quick settings"/>
+
+                <Button x:Name="VolUpButton"
+                        Grid.Row="3"
+                        Grid.Column="0"
+                        Content="+"
+                        Width="36"
+                        Height="36"
+                        FontSize="16"
+                        ToolTip.Tip="Volume up"/>
+                <Button x:Name="VolDownButton"
+                        Grid.Row="3"
+                        Grid.Column="1"
+                        Content="-"
+                        Width="36"
+                        Height="36"
+                        FontSize="16"
+                        ToolTip.Tip="Volume down"/>
+              </Grid>
+            </StackPanel>
           </Border>
 
           <Border HorizontalAlignment="Left"
@@ -348,10 +416,10 @@
       <Grid RowDefinitions="Auto,*"
             RowSpacing="8">
         <Grid Grid.Row="0"
-              ColumnDefinitions="Auto,*"
+              ColumnDefinitions="Auto,*,Auto,Auto,Auto"
               ColumnSpacing="10">
           <TextBlock Text="Output Console"
-                     FontSize="15"
+                     FontSize="14"
                      FontWeight="SemiBold"
                      Foreground="#E7EFF8"
                      VerticalAlignment="Center"/>
@@ -361,6 +429,18 @@
                      Text="Ready"
                      Foreground="#9EB3C7"
                      TextTrimming="CharacterEllipsis"/>
+          <Button x:Name="CopyOutputButton"
+                  Grid.Column="2"
+                  Content="Copy"
+                  MinWidth="76"/>
+          <Button x:Name="SaveOutputButton"
+                  Grid.Column="3"
+                  Content="Save..."
+                  MinWidth="80"/>
+          <Button x:Name="ClearOutputButton"
+                  Grid.Column="4"
+                  Content="Clear"
+                  MinWidth="72"/>
         </Grid>
 
         <Border Grid.Row="1"

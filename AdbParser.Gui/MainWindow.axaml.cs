@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using AdbParser.Core.Execution;
 using AdbParser.Core.Parsers;
@@ -190,6 +191,8 @@ public partial class MainWindow : Window
             ShellCommandTextBox.Text = "dumpsys battery";
         ShellSurfaceQuickButton.Click += (_, _) =>
             ShellCommandTextBox.Text = "dumpsys SurfaceFlinger";
+        CopyOutputButton.Click += async (_, _) => await CopyOutputToClipboardAsync();
+        SaveOutputButton.Click += async (_, _) => await SaveOutputToFileAsync();
         ClearOutputButton.Click += (_, _) => ClearOutput();
 
         FrameInfoText.Text = "No frame yet";
@@ -405,29 +408,45 @@ public partial class MainWindow : Window
 
     private async Task<string> RunScreenshotAsync()
     {
+        var target = await PickSaveFileAsync(
+            title: "Save screenshot",
+            suggestedFileName: $"screen_{DateTime.Now:yyyyMMdd_HHmmss}.png",
+            [new FilePickerFileType("PNG image") { Patterns = ["*.png"] }],
+            "png");
+        if (target is null)
+            return "Screenshot canceled.";
+
         var result = await AdbExecutor.RunBinaryAsync(
             "exec-out",
             "screencap -p",
             GetSelectedDeviceSerial()
         );
 
-        var fileName = $"screen_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-        await using var file = File.Create(fileName);
-        await result.DataStream.CopyToAsync(file);
+        await using (var file = await target.OpenWriteAsync())
+        {
+            await result.DataStream.CopyToAsync(file);
+        }
 
-        return $"Screenshot saved to {fileName}\nDevice: {GetSelectedDeviceLabel()}";
+        return $"Screenshot saved to {DescribeStorageFile(target)}\nDevice: {GetSelectedDeviceLabel()}";
     }
 
     private async Task<string> RunRecord5sAsync()
     {
-        var fileName = $"record_{DateTime.Now:yyyyMMdd_HHmmss}.h264";
+        var target = await PickSaveFileAsync(
+            title: "Save screen record",
+            suggestedFileName: $"record_{DateTime.Now:yyyyMMdd_HHmmss}.h264",
+            [new FilePickerFileType("Raw H264 stream") { Patterns = ["*.h264"] }],
+            "h264");
+        if (target is null)
+            return "Recording canceled.";
+
         using var adb = AdbExecutor.RunBinaryStream(
             "exec-out",
             "screenrecord --output-format=h264 -",
             GetSelectedDeviceSerial()
         );
 
-        await using var file = File.Create(fileName);
+        await using var file = await target.OpenWriteAsync();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         try
@@ -439,7 +458,7 @@ public partial class MainWindow : Window
             // Expected after 5 seconds.
         }
 
-        return $"Recorded ~5s to {fileName}\nDevice: {GetSelectedDeviceLabel()}";
+        return $"Recorded ~5s to {DescribeStorageFile(target)}\nDevice: {GetSelectedDeviceLabel()}";
     }
 
     private Task<string> RunRefreshRateSettingsAsync()
@@ -517,18 +536,107 @@ public partial class MainWindow : Window
         var block = $"[{timestamp}] {title}\n{body.TrimEnd()}\n\n";
         OutputTextBox.Text = (OutputTextBox.Text ?? string.Empty) + block;
         OutputTextBox.CaretIndex = OutputTextBox.Text.Length;
+        UpdateControlState();
     }
 
     private void ClearOutput()
     {
         OutputTextBox.Text = string.Empty;
         SetActionStatus("Output cleared");
+        UpdateControlState();
+    }
+
+    private async Task CopyOutputToClipboardAsync()
+    {
+        var text = OutputTextBox.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            SetActionStatus("Output is empty");
+            return;
+        }
+
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is null)
+            {
+                SetActionStatus("Clipboard unavailable");
+                return;
+            }
+
+            await clipboard.SetTextAsync(text);
+            SetActionStatus("Output copied to clipboard");
+        }
+        catch (Exception ex)
+        {
+            SetActionStatus($"Copy failed: {FirstLine(ex.Message)}");
+        }
+    }
+
+    private async Task SaveOutputToFileAsync()
+    {
+        var text = OutputTextBox.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            SetActionStatus("Output is empty");
+            return;
+        }
+
+        try
+        {
+            var target = await PickSaveFileAsync(
+                title: "Save output console",
+                suggestedFileName: $"adb_output_{DateTime.Now:yyyyMMdd_HHmmss}.txt",
+                [new FilePickerFileType("Text file") { Patterns = ["*.txt", "*.log"] }],
+                "txt");
+
+            if (target is null)
+            {
+                SetActionStatus("Save canceled");
+                return;
+            }
+
+            await using (var stream = await target.OpenWriteAsync())
+            await using (var writer = new StreamWriter(stream, Encoding.UTF8))
+            {
+                await writer.WriteAsync(text);
+            }
+
+            SetActionStatus($"Output saved to {DescribeStorageFile(target)}");
+        }
+        catch (Exception ex)
+        {
+            SetActionStatus($"Save failed: {FirstLine(ex.Message)}");
+        }
     }
 
     private void SetActionStatus(string text)
     {
         ActionStatusText.Text = text;
     }
+
+    private async Task<IStorageFile?> PickSaveFileAsync(
+        string title,
+        string suggestedFileName,
+        IReadOnlyList<FilePickerFileType>? fileTypes = null,
+        string? defaultExtension = null)
+    {
+        var storage = StorageProvider;
+        if (storage is null)
+            throw new InvalidOperationException("Storage provider is not available in this window.");
+
+        return await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = defaultExtension,
+            ShowOverwritePrompt = true,
+            FileTypeChoices = fileTypes
+        });
+    }
+
+    private static string DescribeStorageFile(IStorageFile file)
+        => file.TryGetLocalPath() ?? file.Name;
 
     private async Task StartStreamingAsync()
     {
@@ -961,7 +1069,10 @@ public partial class MainWindow : Window
         ShellWindowQuickButton.IsEnabled = actionControlsEnabled;
         ShellBatteryQuickButton.IsEnabled = actionControlsEnabled;
         ShellSurfaceQuickButton.IsEnabled = actionControlsEnabled;
-        ClearOutputButton.IsEnabled = actionControlsEnabled;
+        var hasOutputText = !string.IsNullOrWhiteSpace(OutputTextBox.Text);
+        CopyOutputButton.IsEnabled = hasOutputText;
+        SaveOutputButton.IsEnabled = hasOutputText;
+        ClearOutputButton.IsEnabled = hasOutputText;
     }
 
     private void ReleaseSessionState(CancellationTokenSource cts)
