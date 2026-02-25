@@ -19,7 +19,7 @@ while (true)
     5 - Screenshot
     6 - Screenrecord (5s)
     7 - Test Fake Screen Stream
-    8 - Test Adb Screen Stream
+    8 - Test Adb Screen Stream (FFmpeg)
     0 - Exit
     """);
 
@@ -146,7 +146,7 @@ static async Task TestScreenStreamAsync()
 {
     Console.WriteLine("Starting screen stream (Ctrl+C to stop)...");
 
-    var decoder = new FakeH264Decoder();
+    using var decoder = new FfmpegH264Decoder();
     var service = new AdbScreenStreamService(decoder);
 
     using var cts = new CancellationTokenSource();

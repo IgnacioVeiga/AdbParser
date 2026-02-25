@@ -33,9 +33,6 @@ public static class AdbExecutor
             );
         }
 
-        if (!string.IsNullOrWhiteSpace(error))
-            throw new Exception(error);
-
         var parser = AdbParserRegistry.Resolve(command.ParserKey)
             ?? throw new Exception($"No parser found for {command.ParserKey}");
 

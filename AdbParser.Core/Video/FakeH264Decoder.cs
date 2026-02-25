@@ -5,9 +5,13 @@ namespace AdbParser.Core.Video;
 public sealed class FakeH264Decoder : IH264Decoder
 {
     private int _frameIndex;
+    private readonly Queue<VideoFrame> _frames = new();
 
-    public bool TryDecode(ReadOnlySpan<byte> h264Data, out VideoFrame frame)
+    public void Feed(ReadOnlySpan<byte> h264Data)
     {
+        if (h264Data.IsEmpty)
+            return;
+
         const int width = 320;
         const int height = 240;
 
@@ -28,15 +32,25 @@ public sealed class FakeH264Decoder : IH264Decoder
             }
         }
 
-        frame = new VideoFrame
+        _frames.Enqueue(new VideoFrame
         {
             Width = width,
             Height = height,
             Format = PixelFormat.Bgra32,
             Data = data
-        };
+        });
+    }
 
-        return true;
+    public bool TryGetFrame(out VideoFrame frame)
+    {
+        if (_frames.Count > 0)
+        {
+            frame = _frames.Dequeue();
+            return true;
+        }
+
+        frame = default!;
+        return false;
     }
 
     public void Dispose() { }

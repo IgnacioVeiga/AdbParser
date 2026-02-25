@@ -4,8 +4,6 @@ namespace AdbParser.Core.Video;
 
 public interface IH264Decoder : IDisposable
 {
-    bool TryDecode(
-        ReadOnlySpan<byte> h264Data,
-        out VideoFrame frame
-    );
+    void Feed(ReadOnlySpan<byte> h264Data);
+    bool TryGetFrame(out VideoFrame frame);
 }

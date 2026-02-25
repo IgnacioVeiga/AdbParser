@@ -11,6 +11,7 @@ namespace AdbParser.Core.Video;
 /// </summary>
 public sealed unsafe class FfmpegH264Decoder : IH264Decoder
 {
+    private readonly Queue<VideoFrame> _decodedFrames = new();
     private AVCodecContext* _codecContext;
     private AVCodec* _codec;
     private AVCodecParserContext* _parser;
@@ -32,7 +33,7 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
     {
         try
         {
-            _codec = ffmpeg.avcodec_find_decoder_by_name("h264");
+            _codec = ffmpeg.avcodec_find_decoder(AVCodecID.AV_CODEC_ID_H264);
         }
         catch (NotSupportedException ex)
         {
@@ -89,17 +90,15 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
         _initialized = true;
     }
 
-    public bool TryDecode(ReadOnlySpan<byte> h264Data, out VideoFrame frame)
+    public void Feed(ReadOnlySpan<byte> h264Data)
     {
         // We parse the raw H.264 byte stream into packets and immediately decode them.
         // ADB delivers arbitrary chunk boundaries, so the parser is mandatory to stitch
         // NAL units before handing them to the decoder, and any decoded frame is
         // converted to BGRA for the GUI renderer to consume safely on any platform.
-        frame = default!;
-
         if (!_initialized || h264Data.IsEmpty)
         {
-            return false;
+            return;
         }
 
         fixed (byte* dataPtr = h264Data)
@@ -123,24 +122,36 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
 
                 if (parsed < 0)
                 {
-                    return false;
+                    return;
                 }
 
                 data += parsed;
                 remaining -= parsed;
+
+                if (parsed == 0 && _packet->size <= 0)
+                {
+                    break;
+                }
 
                 if (_packet->size <= 0)
                 {
                     continue;
                 }
 
-                if (TryDecodePacket(out frame))
-                {
-                    return true;
-                }
+                DecodePacketIntoQueue();
             }
         }
+    }
 
+    public bool TryGetFrame(out VideoFrame frame)
+    {
+        if (_decodedFrames.Count > 0)
+        {
+            frame = _decodedFrames.Dequeue();
+            return true;
+        }
+
+        frame = default!;
         return false;
     }
 
@@ -179,6 +190,7 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
             _codecContext = null;
         }
         _initialized = false;
+        _decodedFrames.Clear();
     }
 
     private static string AvErrorString(int err)
@@ -189,14 +201,13 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
         return Marshal.PtrToStringAnsi(new IntPtr(buffer)) ?? $"error_{err}";
     }
 
-    private bool TryDecodePacket(out VideoFrame frame)
+    private void DecodePacketIntoQueue()
     {
-        frame = default!;
-
         int sendRet = ffmpeg.avcodec_send_packet(_codecContext, _packet);
         if (sendRet < 0 && sendRet != ffmpeg.AVERROR(ffmpeg.EAGAIN))
         {
-            return false;
+            ffmpeg.av_packet_unref(_packet);
+            return;
         }
 
         while (true)
@@ -209,17 +220,14 @@ public sealed unsafe class FfmpegH264Decoder : IH264Decoder
 
             if (receiveRet < 0)
             {
-                return false;
+                break;
             }
 
-            frame = ConvertFrame(_frame);
+            _decodedFrames.Enqueue(ConvertFrame(_frame));
             ffmpeg.av_frame_unref(_frame);
-            ffmpeg.av_packet_unref(_packet);
-            return true;
         }
 
         ffmpeg.av_packet_unref(_packet);
-        return false;
     }
 
     private VideoFrame ConvertFrame(AVFrame* decodedFrame)
