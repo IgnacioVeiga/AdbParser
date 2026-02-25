@@ -195,6 +195,7 @@ public partial class MainWindow : Window
         FrameInfoText.Text = "No frame yet";
         ActionStatusText.Text = "Ready";
         DeviceStatusText.Text = "Devices: not loaded";
+        PreviewHintOverlay.IsVisible = true;
         SetStatus("Disconnected");
     }
 
@@ -697,6 +698,7 @@ public partial class MainWindow : Window
                     _currentFrameWidth = frame.Width;
                     _currentFrameHeight = frame.Height;
                     FrameInfoText.Text = $"{frame.Width}x{frame.Height} | {FormatBytes(frame.Data.Length)} BGRA";
+                    PreviewHintOverlay.IsVisible = false;
 
                     Interlocked.Increment(ref _renderedFrameCount);
                     Interlocked.Exchange(ref _lastRenderTicksUtc, DateTime.UtcNow.Ticks);
@@ -851,6 +853,7 @@ public partial class MainWindow : Window
         _currentFrameWidth = 0;
         _currentFrameHeight = 0;
         FrameInfoText.Text = "Waiting for first frame...";
+        PreviewHintOverlay.IsVisible = true;
         UpdateStatsText();
     }
 
@@ -972,6 +975,7 @@ public partial class MainWindow : Window
         }
 
         _isStopping = false;
+        PreviewHintOverlay.IsVisible = true;
 
         try
         {
