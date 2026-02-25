@@ -102,6 +102,9 @@ public partial class MainWindow : Window
     private IReadOnlyList<Control> _adbActionControls = [];
     private IReadOnlyList<Control> _toolsCategoryPanels = [];
     private string? _preferredDeviceSerialFromSettings;
+    private double _lastNormalWindowWidth;
+    private double _lastNormalWindowHeight;
+    private Avalonia.PixelPoint? _lastNormalWindowPosition;
 
     private readonly SemaphoreSlim _streamOpsGate = new(1, 1);
     private readonly SemaphoreSlim _adbActionGate = new(1, 1);
@@ -127,6 +130,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _userSettings = GuiUserSettingsStore.LoadOrDefault();
+        ApplyLoadedWindowPlacement();
 
         EnsureParsersRegistered();
         ConfigureControls();
@@ -138,11 +142,15 @@ public partial class MainWindow : Window
 
         Opened += OnOpened;
         Closed += OnClosed;
+        PositionChanged += (_, _) => CaptureNormalWindowPlacement();
+        SizeChanged += (_, _) => CaptureNormalWindowPlacement();
     }
 
     private async void OnOpened(object? sender, EventArgs e)
     {
         _statsTimer.Start();
+        ApplyLoadedWindowStateIfNeeded();
+        CaptureNormalWindowPlacement();
         UpdateControlState();
         UpdateStatsText();
         UpdateFooter();
@@ -494,6 +502,85 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ApplyLoadedWindowPlacement()
+    {
+        try
+        {
+            if (_userSettings.WindowWidth is > 320 &&
+                _userSettings.WindowHeight is > 240)
+            {
+                Width = _userSettings.WindowWidth.Value;
+                Height = _userSettings.WindowHeight.Value;
+
+                _lastNormalWindowWidth = Width;
+                _lastNormalWindowHeight = Height;
+            }
+
+            if (_userSettings.WindowPosX is int x && _userSettings.WindowPosY is int y)
+            {
+                var position = new Avalonia.PixelPoint(x, y);
+                Position = position;
+                _lastNormalWindowPosition = position;
+            }
+        }
+        catch
+        {
+            // Ignore invalid placement values and keep framework defaults.
+        }
+    }
+
+    private void ApplyLoadedWindowStateIfNeeded()
+    {
+        // Fullscreen is controlled by the mirror view mode. Persisting it here would
+        // conflict with the app-specific fullscreen behavior and custom exit overlay.
+        if (GetSelectedViewMode() == MirrorViewMode.Fullscreen)
+            return;
+
+        if (!TryParseWindowState(_userSettings.WindowStateName, out var state))
+            return;
+
+        if (state is WindowState.Minimized or WindowState.FullScreen)
+            return;
+
+        try
+        {
+            WindowState = state;
+        }
+        catch
+        {
+            // Some window managers reject state changes during startup.
+        }
+    }
+
+    private void CaptureNormalWindowPlacement()
+    {
+        try
+        {
+            if (WindowState != WindowState.Normal)
+                return;
+
+            if (!double.IsNaN(Width) && Width > 320)
+                _lastNormalWindowWidth = Width;
+            if (!double.IsNaN(Height) && Height > 240)
+                _lastNormalWindowHeight = Height;
+
+            _lastNormalWindowPosition = Position;
+        }
+        catch
+        {
+            // Window may be in a transient state while opening/closing.
+        }
+    }
+
+    private static bool TryParseWindowState(string? value, out WindowState state)
+    {
+        if (Enum.TryParse<WindowState>(value, ignoreCase: true, out state))
+            return true;
+
+        state = WindowState.Normal;
+        return false;
+    }
+
     private void PersistSettingsIfReady()
     {
         if (_suppressSettingsPersistence)
@@ -537,7 +624,14 @@ public partial class MainWindow : Window
             TapX = TapXTextBox.Text,
             TapY = TapYTextBox.Text,
             ToolboxWidth = toolboxWidth > 0 ? toolboxWidth : null,
-            OutputHeight = outputHeight > 0 ? outputHeight : null
+            OutputHeight = outputHeight > 0 ? outputHeight : null,
+            WindowWidth = _lastNormalWindowWidth > 320 ? _lastNormalWindowWidth : (double?)null,
+            WindowHeight = _lastNormalWindowHeight > 240 ? _lastNormalWindowHeight : (double?)null,
+            WindowPosX = _lastNormalWindowPosition?.X,
+            WindowPosY = _lastNormalWindowPosition?.Y,
+            WindowStateName = WindowState == WindowState.FullScreen
+                ? WindowState.Normal.ToString()
+                : WindowState.ToString()
         };
     }
 

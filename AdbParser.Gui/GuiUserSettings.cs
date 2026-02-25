@@ -19,4 +19,10 @@ public sealed class GuiUserSettings
 
     public double? ToolboxWidth { get; set; }
     public double? OutputHeight { get; set; }
+
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public int? WindowPosX { get; set; }
+    public int? WindowPosY { get; set; }
+    public string? WindowStateName { get; set; }
 }
