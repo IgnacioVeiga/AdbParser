@@ -8,9 +8,17 @@
         Title="ADB Screen Test"
         FontSize="13">
 
-  <Grid RowDefinitions="Auto,*,8,240,Auto"
+  <Grid x:Name="RootLayoutGrid"
         Background="#0E141C">
-    <Border Grid.Row="0"
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="8"/>
+      <RowDefinition Height="240"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+    <Border x:Name="TopControlsBar"
+            Grid.Row="0"
             Background="#161F2A"
             BorderBrush="#2B3B4B"
             BorderThickness="0,0,0,1"
@@ -99,17 +107,30 @@
                          FontWeight="SemiBold"
                          FontSize="12"/>
               <StackPanel Grid.Row="1"
-                          Orientation="Horizontal"
                           Spacing="8">
-                <Button x:Name="StartButton"
-                        Content="Start"
-                        MinWidth="86"/>
-                <Button x:Name="StopButton"
-                        Content="Stop"
-                        MinWidth="86"/>
-                <Button x:Name="ReconnectButton"
-                        Content="Reconnect"
-                        MinWidth="106"/>
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <Button x:Name="StartButton"
+                          Content="Start"
+                          MinWidth="86"/>
+                  <Button x:Name="StopButton"
+                          Content="Stop"
+                          MinWidth="86"/>
+                  <Button x:Name="ReconnectButton"
+                          Content="Reconnect"
+                          MinWidth="106"/>
+                </StackPanel>
+
+                <Grid ColumnDefinitions="Auto,*"
+                      ColumnSpacing="8">
+                  <TextBlock Text="View"
+                             Foreground="#9EB3C7"
+                             VerticalAlignment="Center"
+                             FontSize="12"/>
+                  <ComboBox x:Name="ViewModeCombo"
+                            Grid.Column="1"
+                            MinWidth="156"/>
+                </Grid>
               </StackPanel>
             </Grid>
           </Border>
@@ -133,16 +154,24 @@
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1"
+    <Grid x:Name="MainContentGrid"
+          Grid.Row="1"
           Margin="12,12,12,0"
-          ColumnDefinitions="410,8,*">
-      <Border Grid.Column="0"
+          >
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="410"/>
+        <ColumnDefinition Width="8"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <Border x:Name="ToolboxPanel"
+              Grid.Column="0"
               Background="#101722"
               BorderBrush="#273644"
               BorderThickness="1"
               CornerRadius="12"
               Padding="12">
-        <Grid RowDefinitions="Auto,*,Auto"
+        <Grid RowDefinitions="Auto,Auto,*,Auto"
               RowSpacing="10">
           <Grid Grid.Row="0"
                 ColumnDefinitions="*">
@@ -158,92 +187,170 @@
             </StackPanel>
           </Grid>
 
-          <TabControl Grid.Row="1"
-                      x:Name="ToolsTabControl"
-                      TabStripPlacement="Left"
-                      Margin="-4,0,0,0">
-            <TabItem Header="Overview">
-              <ScrollViewer Margin="4">
-                <WrapPanel Margin="8"
-                           Orientation="Horizontal"
+          <Grid Grid.Row="1"
+                ColumnDefinitions="Auto,*"
+                ColumnSpacing="8"
+                VerticalAlignment="Top">
+            <TextBlock Text="Category"
+                       Foreground="#9EB3C7"
+                       FontSize="12"
+                       VerticalAlignment="Center"/>
+            <ComboBox x:Name="ToolsCategoryCombo"
+                      Grid.Column="1"
+                      MinWidth="180"/>
+          </Grid>
+
+          <Grid Grid.Row="2">
+            <ScrollViewer x:Name="OverviewToolsPanel"
+                          Margin="4">
+              <WrapPanel Margin="8"
+                         Orientation="Horizontal"
+                         ItemWidth="136"
+                         ItemHeight="36">
+                <Button x:Name="DevicesButton" Content="Devices" Margin="0,0,8,8"/>
+                <Button x:Name="GetPropButton" Content="GetProp" Margin="0,0,8,8"/>
+                <Button x:Name="BatteryButton" Content="Battery" Margin="0,0,8,8"/>
+                <Button x:Name="PackagesButton" Content="Packages" Margin="0,0,8,8"/>
+                <Button x:Name="ScreenshotButton" Content="Screenshot" Margin="0,0,8,8"/>
+                <Button x:Name="RecordButton" Content="Record 5s" Margin="0,0,8,8"/>
+                <Button x:Name="TopActivityButton" Content="Top Activity" Margin="0,0,8,8"/>
+                <Button x:Name="DisplayInfoButton" Content="Display Info" Margin="0,0,8,8"/>
+              </WrapPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="DisplayToolsPanel"
+                          Margin="4"
+                          IsVisible="False">
+              <WrapPanel Margin="8"
+                         Orientation="Horizontal"
+                         ItemWidth="136"
+                         ItemHeight="36">
+                <Button x:Name="WmSizeButton" Content="WM Size" Margin="0,0,8,8"/>
+                <Button x:Name="WmDensityButton" Content="WM Density" Margin="0,0,8,8"/>
+                <Button x:Name="WindowInfoButton" Content="Window Info" Margin="0,0,8,8"/>
+                <Button x:Name="RotationSettingsButton" Content="Rotation" Margin="0,0,8,8"/>
+                <Button x:Name="RefreshRatesButton" Content="Refresh Rates" Margin="0,0,8,8"/>
+                <Button x:Name="DisplayModesButton" Content="Display Modes" Margin="0,0,8,8"/>
+              </WrapPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="AppsToolsPanel"
+                          Margin="4"
+                          IsVisible="False">
+              <WrapPanel Margin="8"
+                         Orientation="Horizontal"
+                         ItemWidth="136"
+                         ItemHeight="36">
+                <Button x:Name="UserPackagesButton" Content="User Packages" Margin="0,0,8,8"/>
+                <Button x:Name="SystemPackagesButton" Content="System Packages" Margin="0,0,8,8"/>
+                <Button x:Name="MemInfoButton" Content="MemInfo" Margin="0,0,8,8"/>
+                <Button x:Name="ActivityStackButton" Content="Activities" Margin="0,0,8,8"/>
+                <Button x:Name="ProcessesButton" Content="Processes" Margin="0,0,8,8"/>
+                <Button x:Name="StorageButton" Content="Storage" Margin="0,0,8,8"/>
+              </WrapPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="InputToolsPanel"
+                          Margin="4"
+                          IsVisible="False">
+              <StackPanel Margin="8"
+                          Spacing="12">
+                <Border Background="#0C141E"
+                        BorderBrush="#22303C"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Send Text"
+                               Foreground="#DCE7F3"
+                               FontWeight="SemiBold"/>
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8">
+                      <TextBox x:Name="InputTextTextBox"
+                               Watermark="Text to send (spaces supported)"
+                               Text="hello from adb gui"/>
+                      <Button x:Name="SendInputTextButton"
+                              Grid.Column="1"
+                              Content="Send"
+                              MinWidth="72"/>
+                    </Grid>
+                    <TextBlock Text="Uses `adb shell input text` (best for simple text)."
+                               Foreground="#9EB3C7"
+                               FontSize="11"
+                               TextWrapping="Wrap"/>
+                  </StackPanel>
+                </Border>
+
+                <Border Background="#0C141E"
+                        BorderBrush="#22303C"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Touch (Tap)"
+                               Foreground="#DCE7F3"
+                               FontWeight="SemiBold"/>
+                    <Grid ColumnDefinitions="*,*,Auto"
+                          ColumnSpacing="8">
+                      <TextBox x:Name="TapXTextBox"
+                               Watermark="X"
+                               Text="100"/>
+                      <TextBox x:Name="TapYTextBox"
+                               Grid.Column="1"
+                               Watermark="Y"
+                               Text="100"/>
+                      <Button x:Name="TapCoordsButton"
+                              Grid.Column="2"
+                              Content="Tap"
+                              MinWidth="64"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="8">
+                      <Button x:Name="TapCenterButton"
+                              Content="Tap center"
+                              MinWidth="96"/>
+                    </StackPanel>
+                    <TextBlock Text="Tip: frame size is shown on the preview overlay."
+                               Foreground="#9EB3C7"
+                               FontSize="11"
+                               TextWrapping="Wrap"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="ShellToolsPanel"
+                          Margin="4"
+                          IsVisible="False">
+              <StackPanel Margin="8"
+                          Spacing="10">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="8">
+                  <TextBox x:Name="ShellCommandTextBox"
+                           Watermark="adb shell command (e.g. dumpsys display)"
+                           Text="dumpsys display"/>
+                  <Button x:Name="RunShellButton"
+                          Grid.Column="1"
+                          Content="Run"
+                          MinWidth="72"/>
+                </Grid>
+
+                <TextBlock Text="Quick fill"
+                           Foreground="#9EB3C7"
+                           FontSize="12"/>
+                <WrapPanel Orientation="Horizontal"
                            ItemWidth="136"
                            ItemHeight="36">
-                  <Button x:Name="DevicesButton" Content="Devices" Margin="0,0,8,8"/>
-                  <Button x:Name="GetPropButton" Content="GetProp" Margin="0,0,8,8"/>
-                  <Button x:Name="BatteryButton" Content="Battery" Margin="0,0,8,8"/>
-                  <Button x:Name="PackagesButton" Content="Packages" Margin="0,0,8,8"/>
-                  <Button x:Name="ScreenshotButton" Content="Screenshot" Margin="0,0,8,8"/>
-                  <Button x:Name="RecordButton" Content="Record 5s" Margin="0,0,8,8"/>
-                  <Button x:Name="TopActivityButton" Content="Top Activity" Margin="0,0,8,8"/>
-                  <Button x:Name="DisplayInfoButton" Content="Display Info" Margin="0,0,8,8"/>
+                  <Button x:Name="ShellDisplayQuickButton" Content="dumpsys display" Margin="0,0,8,8"/>
+                  <Button x:Name="ShellWindowQuickButton" Content="dumpsys window" Margin="0,0,8,8"/>
+                  <Button x:Name="ShellBatteryQuickButton" Content="dumpsys battery" Margin="0,0,8,8"/>
+                  <Button x:Name="ShellSurfaceQuickButton" Content="SurfaceFlinger" Margin="0,0,8,8"/>
                 </WrapPanel>
-              </ScrollViewer>
-            </TabItem>
+              </StackPanel>
+            </ScrollViewer>
+          </Grid>
 
-            <TabItem Header="Display">
-              <ScrollViewer Margin="4">
-                <WrapPanel Margin="8"
-                           Orientation="Horizontal"
-                           ItemWidth="136"
-                           ItemHeight="36">
-                  <Button x:Name="WmSizeButton" Content="WM Size" Margin="0,0,8,8"/>
-                  <Button x:Name="WmDensityButton" Content="WM Density" Margin="0,0,8,8"/>
-                  <Button x:Name="WindowInfoButton" Content="Window Info" Margin="0,0,8,8"/>
-                  <Button x:Name="RotationSettingsButton" Content="Rotation" Margin="0,0,8,8"/>
-                  <Button x:Name="RefreshRatesButton" Content="Refresh Rates" Margin="0,0,8,8"/>
-                  <Button x:Name="DisplayModesButton" Content="Display Modes" Margin="0,0,8,8"/>
-                </WrapPanel>
-              </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="Apps">
-              <ScrollViewer Margin="4">
-                <WrapPanel Margin="8"
-                           Orientation="Horizontal"
-                           ItemWidth="136"
-                           ItemHeight="36">
-                  <Button x:Name="UserPackagesButton" Content="User Packages" Margin="0,0,8,8"/>
-                  <Button x:Name="SystemPackagesButton" Content="System Packages" Margin="0,0,8,8"/>
-                  <Button x:Name="MemInfoButton" Content="MemInfo" Margin="0,0,8,8"/>
-                  <Button x:Name="ActivityStackButton" Content="Activities" Margin="0,0,8,8"/>
-                  <Button x:Name="ProcessesButton" Content="Processes" Margin="0,0,8,8"/>
-                  <Button x:Name="StorageButton" Content="Storage" Margin="0,0,8,8"/>
-                </WrapPanel>
-              </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="Shell">
-              <ScrollViewer Margin="4">
-                <StackPanel Margin="8"
-                            Spacing="10">
-                  <Grid ColumnDefinitions="*,Auto"
-                        ColumnSpacing="8">
-                    <TextBox x:Name="ShellCommandTextBox"
-                             Watermark="adb shell command (e.g. dumpsys display)"
-                             Text="dumpsys display"/>
-                    <Button x:Name="RunShellButton"
-                            Grid.Column="1"
-                            Content="Run"
-                            MinWidth="72"/>
-                  </Grid>
-
-                  <TextBlock Text="Quick fill"
-                             Foreground="#9EB3C7"
-                             FontSize="12"/>
-                  <WrapPanel Orientation="Horizontal"
-                             ItemWidth="136"
-                             ItemHeight="36">
-                    <Button x:Name="ShellDisplayQuickButton" Content="dumpsys display" Margin="0,0,8,8"/>
-                    <Button x:Name="ShellWindowQuickButton" Content="dumpsys window" Margin="0,0,8,8"/>
-                    <Button x:Name="ShellBatteryQuickButton" Content="dumpsys battery" Margin="0,0,8,8"/>
-                    <Button x:Name="ShellSurfaceQuickButton" Content="SurfaceFlinger" Margin="0,0,8,8"/>
-                  </WrapPanel>
-                </StackPanel>
-              </ScrollViewer>
-            </TabItem>
-          </TabControl>
-
-          <Border Grid.Row="2"
+          <Border Grid.Row="3"
                   Background="#141F2A"
                   BorderBrush="#22303C"
                   BorderThickness="1"
@@ -256,13 +363,15 @@
         </Grid>
       </Border>
 
-      <GridSplitter Grid.Column="1"
+      <GridSplitter x:Name="MainColumnSplitter"
+                    Grid.Column="1"
                     ResizeDirection="Columns"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
                     Background="#1E2A36"/>
 
-      <Border Grid.Column="2"
+      <Border x:Name="MirrorPreviewPanel"
+              Grid.Column="2"
               Background="#090C10"
               BorderBrush="#273644"
               BorderThickness="1"
@@ -284,6 +393,21 @@
                        TextAlignment="Center"
                        Foreground="#AFC2D4"
                        FontSize="13"/>
+          </Border>
+
+          <Border x:Name="FullscreenExitOverlay"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Margin="12"
+                  Background="#C8141A22"
+                  BorderBrush="#2A3947"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Padding="6"
+                  IsVisible="False">
+            <Button x:Name="ExitFullscreenButton"
+                    Content="Exit Fullscreen"
+                    MinWidth="124"/>
           </Border>
 
           <Border HorizontalAlignment="Right"
@@ -399,14 +523,16 @@
       </Border>
     </Grid>
 
-    <GridSplitter Grid.Row="2"
+    <GridSplitter x:Name="OutputRowSplitter"
+                  Grid.Row="2"
                   ResizeDirection="Rows"
                   HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch"
                   Margin="12,0"
                   Background="#1E2A36"/>
 
-    <Border Grid.Row="3"
+    <Border x:Name="OutputPanel"
+            Grid.Row="3"
             Margin="12,0,12,0"
             Background="#101722"
             BorderBrush="#273644"
@@ -462,7 +588,8 @@
       </Grid>
     </Border>
 
-    <Border Grid.Row="4"
+    <Border x:Name="FooterBar"
+            Grid.Row="4"
             Background="#111A24"
             BorderBrush="#273644"
             BorderThickness="0,1,0,0"

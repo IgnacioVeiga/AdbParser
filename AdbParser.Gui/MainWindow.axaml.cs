@@ -20,6 +20,13 @@ namespace AdbParser.Gui;
 
 public partial class MainWindow : Window
 {
+    private enum MirrorViewMode
+    {
+        Normal,
+        Focus,
+        Fullscreen
+    }
+
     private sealed class DeviceChoice
     {
         public string Label { get; init; } = "";
@@ -27,6 +34,15 @@ public partial class MainWindow : Window
         public string Status { get; init; } = "";
         public override string ToString() => Label;
     }
+
+    private static readonly string[] ToolCategoryOptions =
+    [
+        "Overview",
+        "Display",
+        "Apps",
+        "Input",
+        "Shell"
+    ];
 
     private static readonly (string Label, int? Width, int? Height)[] ResolutionPresets =
     [
@@ -61,6 +77,13 @@ public partial class MainWindow : Window
         ("15", 15)
     ];
 
+    private static readonly (string Label, MirrorViewMode Mode)[] ViewModePresets =
+    [
+        ("Normal", MirrorViewMode.Normal),
+        ("Focus (mirror)", MirrorViewMode.Focus),
+        ("Fullscreen", MirrorViewMode.Fullscreen)
+    ];
+
     private WriteableBitmap? _bitmap;
     private CancellationTokenSource? _cts;
     private Task? _producerTask;
@@ -70,6 +93,13 @@ public partial class MainWindow : Window
     private bool _isStopping;
     private bool _isClosing;
     private bool _adbActionBusy;
+    private bool _suppressViewModeSelectionChange;
+    private WindowState _windowStateBeforeFullscreen = WindowState.Normal;
+    private MirrorViewMode _lastNonFullscreenViewMode = MirrorViewMode.Normal;
+    private GridLength _savedToolboxWidth = new(410);
+    private GridLength _savedOutputHeight = new(240);
+    private IReadOnlyList<Control> _adbActionControls = [];
+    private IReadOnlyList<Control> _toolsCategoryPanels = [];
 
     private readonly SemaphoreSlim _streamOpsGate = new(1, 1);
     private readonly SemaphoreSlim _adbActionGate = new(1, 1);
@@ -137,10 +167,14 @@ public partial class MainWindow : Window
         ResolutionCombo.ItemsSource = Array.ConvertAll(ResolutionPresets, p => p.Label);
         BitrateCombo.ItemsSource = Array.ConvertAll(BitratePresets, p => p.Label);
         RenderFpsCombo.ItemsSource = Array.ConvertAll(RenderFpsPresets, p => p.Label);
+        ViewModeCombo.ItemsSource = Array.ConvertAll(ViewModePresets, p => p.Label);
+        ToolsCategoryCombo.ItemsSource = ToolCategoryOptions;
 
         ResolutionCombo.SelectedIndex = 0;
         BitrateCombo.SelectedIndex = 1; // 8 Mbps default
         RenderFpsCombo.SelectedIndex = 0; // Unlimited (lower latency)
+        ViewModeCombo.SelectedIndex = 0;
+        ToolsCategoryCombo.SelectedIndex = 0;
 
         StartButton.Click += async (_, _) => await RunStreamOpAsync(StartStreamingAsync);
         StopButton.Click += async (_, _) => await RunStreamOpAsync(() => StopStreamingAsync());
@@ -149,6 +183,12 @@ public partial class MainWindow : Window
         ResolutionCombo.SelectionChanged += (_, _) => UpdateFooter();
         BitrateCombo.SelectionChanged += (_, _) => UpdateFooter();
         RenderFpsCombo.SelectionChanged += (_, _) => UpdateFooter();
+        ViewModeCombo.SelectionChanged += (_, _) =>
+        {
+            if (!_suppressViewModeSelectionChange)
+                ApplyMirrorViewMode();
+        };
+        ToolsCategoryCombo.SelectionChanged += (_, _) => ApplyToolsCategorySelection();
 
         DevicesButton.Click += async (_, _) => await RunAdbActionAsync("Devices", RefreshDevicesOutputAsync);
         GetPropButton.Click += async (_, _) => await RunAdbActionAsync("GetProp", RunGetPropAsync);
@@ -181,6 +221,11 @@ public partial class MainWindow : Window
         VolDownButton.Click += async (_, _) => await RunAdbActionAsync("Volume Down", () => RunNamedShellCommandAsync("Volume Down", "input keyevent KEYCODE_VOLUME_DOWN"));
         NotificationsButton.Click += async (_, _) => await RunAdbActionAsync("Notifications", () => RunNamedShellCommandAsync("Notifications", "cmd statusbar expand-notifications"));
         QuickSettingsButton.Click += async (_, _) => await RunAdbActionAsync("Quick Settings", () => RunNamedShellCommandAsync("Quick Settings", "cmd statusbar expand-settings"));
+        ExitFullscreenButton.Click += (_, _) => ExitFullscreenOverlayView();
+
+        SendInputTextButton.Click += async (_, _) => await RunAdbActionAsync("Input Text", RunInputTextAsync);
+        TapCoordsButton.Click += async (_, _) => await RunAdbActionAsync("Input Tap", RunTapCoordinatesAsync);
+        TapCenterButton.Click += async (_, _) => await RunAdbActionAsync("Input Tap Center", RunTapCenterAsync);
 
         RunShellButton.Click += async (_, _) => await RunAdbActionAsync("Shell", RunCustomShellAsync);
         ShellDisplayQuickButton.Click += (_, _) =>
@@ -195,6 +240,9 @@ public partial class MainWindow : Window
         SaveOutputButton.Click += async (_, _) => await SaveOutputToFileAsync();
         ClearOutputButton.Click += (_, _) => ClearOutput();
 
+        InitializeControlGroups();
+        ApplyToolsCategorySelection();
+        ApplyMirrorViewMode();
         FrameInfoText.Text = "No frame yet";
         ActionStatusText.Text = "Ready";
         DeviceStatusText.Text = "Devices: not loaded";
@@ -317,6 +365,262 @@ public partial class MainWindow : Window
         return string.IsNullOrWhiteSpace(serial) ? "" : $"-s {serial} ";
     }
 
+    private void InitializeControlGroups()
+    {
+        _toolsCategoryPanels =
+        [
+            OverviewToolsPanel,
+            DisplayToolsPanel,
+            AppsToolsPanel,
+            InputToolsPanel,
+            ShellToolsPanel
+        ];
+
+        _adbActionControls =
+        [
+            DeviceCombo,
+            RefreshDevicesButton,
+            DevicesButton,
+            GetPropButton,
+            PackagesButton,
+            BatteryButton,
+            ScreenshotButton,
+            RecordButton,
+            TopActivityButton,
+            DisplayInfoButton,
+            WmSizeButton,
+            WmDensityButton,
+            WindowInfoButton,
+            RotationSettingsButton,
+            RefreshRatesButton,
+            DisplayModesButton,
+            UserPackagesButton,
+            SystemPackagesButton,
+            MemInfoButton,
+            ActivityStackButton,
+            ProcessesButton,
+            StorageButton,
+            HomeButton,
+            BackButton,
+            RecentsButton,
+            PowerButton,
+            VolUpButton,
+            VolDownButton,
+            NotificationsButton,
+            QuickSettingsButton,
+            RunShellButton,
+            ShellCommandTextBox,
+            ShellDisplayQuickButton,
+            ShellWindowQuickButton,
+            ShellBatteryQuickButton,
+            ShellSurfaceQuickButton,
+            SendInputTextButton,
+            InputTextTextBox,
+            TapXTextBox,
+            TapYTextBox,
+            TapCoordsButton,
+            TapCenterButton
+        ];
+    }
+
+    private void ApplyToolsCategorySelection()
+    {
+        var index = ClampIndex(ToolsCategoryCombo.SelectedIndex, _toolsCategoryPanels.Count);
+        for (var i = 0; i < _toolsCategoryPanels.Count; i++)
+        {
+            _toolsCategoryPanels[i].IsVisible = i == index;
+        }
+    }
+
+    private MirrorViewMode GetSelectedViewMode()
+    {
+        var preset = ViewModePresets[ClampIndex(ViewModeCombo.SelectedIndex, ViewModePresets.Length)];
+        return preset.Mode;
+    }
+
+    private string GetSelectedViewModeLabel()
+    {
+        var preset = ViewModePresets[ClampIndex(ViewModeCombo.SelectedIndex, ViewModePresets.Length)];
+        return preset.Label;
+    }
+
+    private void SetViewModeSelection(MirrorViewMode mode)
+    {
+        var index = Array.FindIndex(ViewModePresets, p => p.Mode == mode);
+        if (index < 0)
+            index = 0;
+
+        if (ViewModeCombo.SelectedIndex == index)
+        {
+            ApplyMirrorViewMode();
+            return;
+        }
+
+        _suppressViewModeSelectionChange = true;
+        try
+        {
+            ViewModeCombo.SelectedIndex = index;
+        }
+        finally
+        {
+            _suppressViewModeSelectionChange = false;
+        }
+
+        ApplyMirrorViewMode();
+    }
+
+    private void ExitFullscreenOverlayView()
+    {
+        var restoreMode = _lastNonFullscreenViewMode == MirrorViewMode.Fullscreen
+            ? MirrorViewMode.Normal
+            : _lastNonFullscreenViewMode;
+        SetViewModeSelection(restoreMode);
+    }
+
+    private void ApplyMirrorViewMode()
+    {
+        var mode = GetSelectedViewMode();
+        if (mode != MirrorViewMode.Fullscreen)
+        {
+            _lastNonFullscreenViewMode = mode;
+        }
+
+        var expandedMirror = mode is MirrorViewMode.Focus or MirrorViewMode.Fullscreen;
+
+        if (!expandedMirror)
+        {
+            RestoreMainPanelsLayout();
+            SetFullscreenChromeHidden(false);
+            ExitFullscreenIfNeeded();
+        }
+        else
+        {
+            SaveMainPanelsLayout();
+            CollapseMainPanelsForMirror();
+
+            if (mode == MirrorViewMode.Fullscreen)
+            {
+                SetFullscreenChromeHidden(true);
+                EnterFullscreen();
+            }
+            else
+            {
+                SetFullscreenChromeHidden(false);
+                ExitFullscreenIfNeeded();
+            }
+        }
+
+        UpdateFooter();
+    }
+
+    private void SaveMainPanelsLayout()
+    {
+        if (MainContentGrid.ColumnDefinitions.Count >= 3 &&
+            MainContentGrid.ColumnDefinitions[0].Width.Value > 0)
+        {
+            _savedToolboxWidth = MainContentGrid.ColumnDefinitions[0].Width;
+        }
+
+        if (RootLayoutGrid.RowDefinitions.Count >= 4 &&
+            RootLayoutGrid.RowDefinitions[3].Height.Value > 0)
+        {
+            _savedOutputHeight = RootLayoutGrid.RowDefinitions[3].Height;
+        }
+    }
+
+    private void CollapseMainPanelsForMirror()
+    {
+        ToolboxPanel.IsVisible = false;
+        MainColumnSplitter.IsVisible = false;
+        OutputRowSplitter.IsVisible = false;
+        OutputPanel.IsVisible = false;
+
+        if (MainContentGrid.ColumnDefinitions.Count >= 3)
+        {
+            MainContentGrid.ColumnDefinitions[0].Width = new GridLength(0);
+            MainContentGrid.ColumnDefinitions[1].Width = new GridLength(0);
+            MainContentGrid.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
+        }
+
+        if (RootLayoutGrid.RowDefinitions.Count >= 4)
+        {
+            RootLayoutGrid.RowDefinitions[2].Height = new GridLength(0);
+            RootLayoutGrid.RowDefinitions[3].Height = new GridLength(0);
+        }
+    }
+
+    private void RestoreMainPanelsLayout()
+    {
+        ToolboxPanel.IsVisible = true;
+        MainColumnSplitter.IsVisible = true;
+        OutputRowSplitter.IsVisible = true;
+        OutputPanel.IsVisible = true;
+
+        if (MainContentGrid.ColumnDefinitions.Count >= 3)
+        {
+            MainContentGrid.ColumnDefinitions[0].Width = _savedToolboxWidth.Value > 0
+                ? _savedToolboxWidth
+                : new GridLength(410);
+            MainContentGrid.ColumnDefinitions[1].Width = new GridLength(8);
+            MainContentGrid.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
+        }
+
+        if (RootLayoutGrid.RowDefinitions.Count >= 4)
+        {
+            RootLayoutGrid.RowDefinitions[2].Height = new GridLength(8);
+            RootLayoutGrid.RowDefinitions[3].Height = _savedOutputHeight.Value > 0
+                ? _savedOutputHeight
+                : new GridLength(240);
+        }
+    }
+
+    private void SetFullscreenChromeHidden(bool hidden)
+    {
+        TopControlsBar.IsVisible = !hidden;
+        FooterBar.IsVisible = !hidden;
+        FullscreenExitOverlay.IsVisible = hidden;
+
+        if (RootLayoutGrid.RowDefinitions.Count >= 5)
+        {
+            RootLayoutGrid.RowDefinitions[0].Height = hidden ? new GridLength(0) : GridLength.Auto;
+            RootLayoutGrid.RowDefinitions[4].Height = hidden ? new GridLength(0) : GridLength.Auto;
+        }
+    }
+
+    private void EnterFullscreen()
+    {
+        try
+        {
+            if (WindowState != WindowState.FullScreen)
+            {
+                _windowStateBeforeFullscreen = WindowState;
+                WindowState = WindowState.FullScreen;
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Fullscreen unavailable: {FirstLine(ex.Message)}");
+        }
+    }
+
+    private void ExitFullscreenIfNeeded()
+    {
+        if (WindowState != WindowState.FullScreen)
+            return;
+
+        try
+        {
+            var restoreState = _windowStateBeforeFullscreen == WindowState.FullScreen
+                ? WindowState.Normal
+                : _windowStateBeforeFullscreen;
+            WindowState = restoreState;
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Exit fullscreen failed: {FirstLine(ex.Message)}");
+        }
+    }
+
     private async Task RunStreamOpAsync(Func<Task> operation)
     {
         await _streamOpsGate.WaitAsync();
@@ -404,6 +708,54 @@ public partial class MainWindow : Window
 
         var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(shellCommand));
         return $"$ adb {BuildDeviceSelectorPreview()}shell {shellCommand}\n\n" + FormatParsedResult(result);
+    }
+
+    private async Task<string> RunInputTextAsync()
+    {
+        var text = (InputTextTextBox.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            throw new InvalidOperationException("Input text is empty.");
+
+        var encodedText = EncodeAndroidInputText(text);
+        var command = $"input text \"{encodedText}\"";
+        _ = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(command));
+
+        return
+            $"Text sent to device.\n" +
+            $"Device: {GetSelectedDeviceLabel()}\n" +
+            $"Command: adb {BuildDeviceSelectorPreview()}shell {command}\n" +
+            $"Text: {text}";
+    }
+
+    private async Task<string> RunTapCoordinatesAsync()
+    {
+        if (!TryParseNonNegativeInt(TapXTextBox.Text, out var x))
+            throw new InvalidOperationException("Tap X must be a non-negative integer.");
+        if (!TryParseNonNegativeInt(TapYTextBox.Text, out var y))
+            throw new InvalidOperationException("Tap Y must be a non-negative integer.");
+
+        return await RunTapAsync(x, y, "Tap coordinates");
+    }
+
+    private async Task<string> RunTapCenterAsync()
+    {
+        if (_currentFrameWidth <= 0 || _currentFrameHeight <= 0)
+            throw new InvalidOperationException("No frame size available yet. Start mirror first.");
+
+        var x = _currentFrameWidth / 2;
+        var y = _currentFrameHeight / 2;
+        return await RunTapAsync(x, y, "Tap center");
+    }
+
+    private async Task<string> RunTapAsync(int x, int y, string label)
+    {
+        var command = $"input tap {x} {y}";
+        _ = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(command));
+
+        return
+            $"{label} sent.\n" +
+            $"Device: {GetSelectedDeviceLabel()}\n" +
+            $"Command: adb {BuildDeviceSelectorPreview()}shell {command}";
     }
 
     private async Task<string> RunScreenshotAsync()
@@ -1012,9 +1364,10 @@ public partial class MainWindow : Window
         var bitrate = BitratePresets[ClampIndex(BitrateCombo.SelectedIndex, BitratePresets.Length)].Label;
         var renderCap = RenderFpsPresets[ClampIndex(RenderFpsCombo.SelectedIndex, RenderFpsPresets.Length)].Label;
         var device = GetSelectedDeviceLabel();
+        var viewMode = GetSelectedViewModeLabel();
 
         FooterText.Text =
-            $"Device: {device} | Preset: {res}, {bitrate}, render cap {renderCap}. " +
+            $"Device: {device} | View: {viewMode} | Preset: {res}, {bitrate}, render cap {renderCap}. " +
             "Settings apply on Start/Reconnect. Lower bitrate/resolution if latency is high.";
     }
 
@@ -1031,44 +1384,15 @@ public partial class MainWindow : Window
         ResolutionCombo.IsEnabled = !running;
         BitrateCombo.IsEnabled = !running;
         RenderFpsCombo.IsEnabled = !running;
+        ViewModeCombo.IsEnabled = true;
+        ToolsCategoryCombo.IsEnabled = !_adbActionBusy;
+        ExitFullscreenButton.IsEnabled = true;
 
         var actionControlsEnabled = !_adbActionBusy;
-        DeviceCombo.IsEnabled = actionControlsEnabled;
-        RefreshDevicesButton.IsEnabled = actionControlsEnabled;
-        DevicesButton.IsEnabled = actionControlsEnabled;
-        GetPropButton.IsEnabled = actionControlsEnabled;
-        PackagesButton.IsEnabled = actionControlsEnabled;
-        BatteryButton.IsEnabled = actionControlsEnabled;
-        ScreenshotButton.IsEnabled = actionControlsEnabled;
-        RecordButton.IsEnabled = actionControlsEnabled;
-        TopActivityButton.IsEnabled = actionControlsEnabled;
-        DisplayInfoButton.IsEnabled = actionControlsEnabled;
-        WmSizeButton.IsEnabled = actionControlsEnabled;
-        WmDensityButton.IsEnabled = actionControlsEnabled;
-        WindowInfoButton.IsEnabled = actionControlsEnabled;
-        RotationSettingsButton.IsEnabled = actionControlsEnabled;
-        RefreshRatesButton.IsEnabled = actionControlsEnabled;
-        DisplayModesButton.IsEnabled = actionControlsEnabled;
-        UserPackagesButton.IsEnabled = actionControlsEnabled;
-        SystemPackagesButton.IsEnabled = actionControlsEnabled;
-        MemInfoButton.IsEnabled = actionControlsEnabled;
-        ActivityStackButton.IsEnabled = actionControlsEnabled;
-        ProcessesButton.IsEnabled = actionControlsEnabled;
-        StorageButton.IsEnabled = actionControlsEnabled;
-        HomeButton.IsEnabled = actionControlsEnabled;
-        BackButton.IsEnabled = actionControlsEnabled;
-        RecentsButton.IsEnabled = actionControlsEnabled;
-        PowerButton.IsEnabled = actionControlsEnabled;
-        VolUpButton.IsEnabled = actionControlsEnabled;
-        VolDownButton.IsEnabled = actionControlsEnabled;
-        NotificationsButton.IsEnabled = actionControlsEnabled;
-        QuickSettingsButton.IsEnabled = actionControlsEnabled;
-        RunShellButton.IsEnabled = actionControlsEnabled;
-        ShellCommandTextBox.IsEnabled = actionControlsEnabled;
-        ShellDisplayQuickButton.IsEnabled = actionControlsEnabled;
-        ShellWindowQuickButton.IsEnabled = actionControlsEnabled;
-        ShellBatteryQuickButton.IsEnabled = actionControlsEnabled;
-        ShellSurfaceQuickButton.IsEnabled = actionControlsEnabled;
+        foreach (var control in _adbActionControls)
+        {
+            control.IsEnabled = actionControlsEnabled;
+        }
         var hasOutputText = !string.IsNullOrWhiteSpace(OutputTextBox.Text);
         CopyOutputButton.IsEnabled = hasOutputText;
         SaveOutputButton.IsEnabled = hasOutputText;
@@ -1146,6 +1470,49 @@ public partial class MainWindow : Window
     private void SetStatus(string text)
     {
         StatusText.Text = $"Status: {text}";
+    }
+
+    private static bool TryParseNonNegativeInt(string? text, out int value)
+    {
+        if (int.TryParse(text, out value) && value >= 0)
+            return true;
+
+        value = 0;
+        return false;
+    }
+
+    private static string EncodeAndroidInputText(string text)
+    {
+        var sb = new StringBuilder(text.Length + 8);
+        foreach (var ch in text)
+        {
+            switch (ch)
+            {
+                case ' ':
+                    sb.Append("%s");
+                    break;
+                case '\\':
+                    sb.Append("\\\\");
+                    break;
+                case '"':
+                    sb.Append("\\\"");
+                    break;
+                case '$':
+                    sb.Append("\\$");
+                    break;
+                case '`':
+                    sb.Append("\\`");
+                    break;
+                case '%':
+                    sb.Append("\\%");
+                    break;
+                default:
+                    sb.Append(ch);
+                    break;
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static int ClampIndex(int index, int length)
