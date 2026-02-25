@@ -14,60 +14,73 @@
             BorderBrush="#2A3947"
             BorderThickness="0,0,0,1"
             Padding="12">
-      <Grid RowDefinitions="Auto,Auto"
-            RowSpacing="8"
-            ColumnDefinitions="Auto,170,Auto,150,Auto,130,Auto,Auto,Auto,*"
-            ColumnSpacing="8">
-        <TextBlock Grid.Row="0"
-                   Grid.Column="0"
-                   VerticalAlignment="Center"
-                   Text="Resolution"
-                   Foreground="#D9E2EC"/>
-        <ComboBox x:Name="ResolutionCombo"
-                  Grid.Row="0"
-                  Grid.Column="1"
-                  MinWidth="150"/>
+      <Grid RowDefinitions="Auto,Auto,Auto"
+            RowSpacing="8">
+        <Grid Grid.Row="0"
+              ColumnDefinitions="Auto,260,Auto,*"
+              ColumnSpacing="8">
+          <TextBlock Grid.Column="0"
+                     VerticalAlignment="Center"
+                     Text="Device"
+                     Foreground="#D9E2EC"/>
+          <ComboBox x:Name="DeviceCombo"
+                    Grid.Column="1"
+                    MinWidth="240"/>
+          <Button x:Name="RefreshDevicesButton"
+                  Grid.Column="2"
+                  Content="Refresh devices"
+                  MinWidth="120"/>
+          <TextBlock x:Name="DeviceStatusText"
+                     Grid.Column="3"
+                     VerticalAlignment="Center"
+                     Text="Devices: unknown"
+                     Foreground="#AFC2D4"
+                     TextTrimming="CharacterEllipsis"/>
+        </Grid>
 
-        <TextBlock Grid.Row="0"
-                   Grid.Column="2"
-                   VerticalAlignment="Center"
-                   Text="Bitrate"
-                   Foreground="#D9E2EC"/>
-        <ComboBox x:Name="BitrateCombo"
-                  Grid.Row="0"
-                  Grid.Column="3"
-                  MinWidth="130"/>
+        <Grid Grid.Row="1"
+              ColumnDefinitions="Auto,170,Auto,150,Auto,130,Auto,Auto,Auto,*"
+              ColumnSpacing="8">
+          <TextBlock Grid.Column="0"
+                     VerticalAlignment="Center"
+                     Text="Resolution"
+                     Foreground="#D9E2EC"/>
+          <ComboBox x:Name="ResolutionCombo"
+                    Grid.Column="1"
+                    MinWidth="150"/>
 
-        <TextBlock Grid.Row="0"
-                   Grid.Column="4"
-                   VerticalAlignment="Center"
-                   Text="Render FPS"
-                   Foreground="#D9E2EC"/>
-        <ComboBox x:Name="RenderFpsCombo"
-                  Grid.Row="0"
-                  Grid.Column="5"
-                  MinWidth="110"/>
+          <TextBlock Grid.Column="2"
+                     VerticalAlignment="Center"
+                     Text="Bitrate"
+                     Foreground="#D9E2EC"/>
+          <ComboBox x:Name="BitrateCombo"
+                    Grid.Column="3"
+                    MinWidth="130"/>
 
-        <Button x:Name="StartButton"
-                Grid.Row="0"
-                Grid.Column="6"
-                Content="Start"
-                MinWidth="80"/>
-        <Button x:Name="StopButton"
-                Grid.Row="0"
-                Grid.Column="7"
-                Content="Stop"
-                MinWidth="80"/>
-        <Button x:Name="ReconnectButton"
-                Grid.Row="0"
-                Grid.Column="8"
-                Content="Reconnect"
-                MinWidth="100"/>
+          <TextBlock Grid.Column="4"
+                     VerticalAlignment="Center"
+                     Text="Render FPS"
+                     Foreground="#D9E2EC"/>
+          <ComboBox x:Name="RenderFpsCombo"
+                    Grid.Column="5"
+                    MinWidth="110"/>
+
+          <Button x:Name="StartButton"
+                  Grid.Column="6"
+                  Content="Start"
+                  MinWidth="80"/>
+          <Button x:Name="StopButton"
+                  Grid.Column="7"
+                  Content="Stop"
+                  MinWidth="80"/>
+          <Button x:Name="ReconnectButton"
+                  Grid.Column="8"
+                  Content="Reconnect"
+                  MinWidth="100"/>
+        </Grid>
 
         <TextBlock x:Name="StatsText"
-                   Grid.Row="1"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="10"
+                   Grid.Row="2"
                    Text="Decoded: 0 (0.0 fps) | Rendered: 0 (0.0 fps) | Frame: n/a | Render cap: Unlimited"
                    Foreground="#AFC2D4"
                    TextTrimming="CharacterEllipsis"/>
@@ -83,50 +96,177 @@
               BorderThickness="1"
               CornerRadius="10"
               Padding="12">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+        <Grid RowDefinitions="Auto,*,Auto,*,Auto"
               RowSpacing="10">
-          <TextBlock Text="ADB Tools"
+          <TextBlock Grid.Row="0"
+                     Text="ADB Tools"
                      FontSize="18"
                      FontWeight="SemiBold"
                      Foreground="#E6EDF5"/>
 
-          <WrapPanel Grid.Row="1"
-                     ItemHeight="34"
-                     ItemWidth="160"
-                     Orientation="Horizontal">
-            <Button x:Name="DevicesButton"
-                    Content="Devices"
-                    Margin="0,0,8,8"/>
-            <Button x:Name="GetPropButton"
-                    Content="GetProp"
-                    Margin="0,0,8,8"/>
-            <Button x:Name="PackagesButton"
-                    Content="Packages"
-                    Margin="0,0,8,8"/>
-            <Button x:Name="BatteryButton"
-                    Content="Battery"
-                    Margin="0,0,8,8"/>
-            <Button x:Name="ScreenshotButton"
-                    Content="Screenshot"
-                    Margin="0,0,8,8"/>
-            <Button x:Name="RecordButton"
-                    Content="Record 5s"
-                    Margin="0,0,8,8"/>
-          </WrapPanel>
+          <TabControl Grid.Row="1"
+                      x:Name="ToolsTabControl">
+            <TabItem Header="Overview">
+              <ScrollViewer>
+                <WrapPanel Margin="8"
+                           ItemHeight="34"
+                           ItemWidth="148"
+                           Orientation="Horizontal">
+                  <Button x:Name="DevicesButton"
+                          Content="Devices"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="GetPropButton"
+                          Content="GetProp"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="BatteryButton"
+                          Content="Battery"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="PackagesButton"
+                          Content="Packages"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="ScreenshotButton"
+                          Content="Screenshot"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="RecordButton"
+                          Content="Record 5s"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="TopActivityButton"
+                          Content="Top Activity"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="DisplayInfoButton"
+                          Content="Display Info"
+                          Margin="0,0,8,8"/>
+                </WrapPanel>
+              </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Display">
+              <ScrollViewer>
+                <WrapPanel Margin="8"
+                           ItemHeight="34"
+                           ItemWidth="148"
+                           Orientation="Horizontal">
+                  <Button x:Name="WmSizeButton"
+                          Content="WM Size"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="WmDensityButton"
+                          Content="WM Density"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="WindowInfoButton"
+                          Content="Window Info"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="RotationSettingsButton"
+                          Content="Rotation Settings"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="RefreshRatesButton"
+                          Content="Refresh Rates"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="DisplayModesButton"
+                          Content="Display Modes"
+                          Margin="0,0,8,8"/>
+                </WrapPanel>
+              </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Apps">
+              <ScrollViewer>
+                <WrapPanel Margin="8"
+                           ItemHeight="34"
+                           ItemWidth="148"
+                           Orientation="Horizontal">
+                  <Button x:Name="UserPackagesButton"
+                          Content="User Packages"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="SystemPackagesButton"
+                          Content="System Packages"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="MemInfoButton"
+                          Content="MemInfo"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="ActivityStackButton"
+                          Content="Activities"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="ProcessesButton"
+                          Content="Processes"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="StorageButton"
+                          Content="Storage"
+                          Margin="0,0,8,8"/>
+                </WrapPanel>
+              </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Input">
+              <ScrollViewer>
+                <WrapPanel Margin="8"
+                           ItemHeight="34"
+                           ItemWidth="148"
+                           Orientation="Horizontal">
+                  <Button x:Name="HomeButton"
+                          Content="Home"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="BackButton"
+                          Content="Back"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="RecentsButton"
+                          Content="Recents"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="PowerButton"
+                          Content="Power"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="VolUpButton"
+                          Content="Volume +"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="VolDownButton"
+                          Content="Volume -"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="NotificationsButton"
+                          Content="Notifications"
+                          Margin="0,0,8,8"/>
+                  <Button x:Name="QuickSettingsButton"
+                          Content="Quick Settings"
+                          Margin="0,0,8,8"/>
+                </WrapPanel>
+              </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Shell">
+              <ScrollViewer>
+                <StackPanel Margin="8"
+                            Spacing="8">
+                  <Grid ColumnDefinitions="*,Auto"
+                        ColumnSpacing="8">
+                    <TextBox x:Name="ShellCommandTextBox"
+                             Watermark="adb shell command (e.g. dumpsys display)"
+                             Text="dumpsys display"/>
+                    <Button x:Name="RunShellButton"
+                            Grid.Column="1"
+                            Content="Run shell"
+                            MinWidth="90"/>
+                  </Grid>
+
+                  <WrapPanel ItemHeight="34"
+                             ItemWidth="148"
+                             Orientation="Horizontal">
+                    <Button x:Name="ShellDisplayQuickButton"
+                            Content="dumpsys display"
+                            Margin="0,0,8,8"/>
+                    <Button x:Name="ShellWindowQuickButton"
+                            Content="dumpsys window"
+                            Margin="0,0,8,8"/>
+                    <Button x:Name="ShellBatteryQuickButton"
+                            Content="dumpsys battery"
+                            Margin="0,0,8,8"/>
+                    <Button x:Name="ShellSurfaceQuickButton"
+                            Content="dumpsys SurfaceFlinger"
+                            Margin="0,0,8,8"/>
+                  </WrapPanel>
+                </StackPanel>
+              </ScrollViewer>
+            </TabItem>
+          </TabControl>
 
           <Grid Grid.Row="2"
-                ColumnDefinitions="*,Auto"
-                ColumnSpacing="8">
-            <TextBox x:Name="ShellCommandTextBox"
-                     Watermark="adb shell command (e.g. dumpsys display)"
-                     Text="dumpsys display"/>
-            <Button x:Name="RunShellButton"
-                    Grid.Column="1"
-                    Content="Run shell"
-                    MinWidth="90"/>
-          </Grid>
-
-          <Grid Grid.Row="3"
                 ColumnDefinitions="Auto,*"
                 ColumnSpacing="8">
             <Button x:Name="ClearOutputButton"
@@ -140,7 +280,7 @@
                        TextTrimming="CharacterEllipsis"/>
           </Grid>
 
-          <Border Grid.Row="4"
+          <Border Grid.Row="3"
                   Background="#0A1015"
                   BorderBrush="#22303C"
                   BorderThickness="1"
@@ -157,7 +297,7 @@
                      Text="ADB GUI ready. Use the buttons above to run commands."/>
           </Border>
 
-          <Border Grid.Row="5"
+          <Border Grid.Row="4"
                   Background="#151F28"
                   BorderBrush="#22303C"
                   BorderThickness="1"

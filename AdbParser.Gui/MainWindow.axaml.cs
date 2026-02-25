@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using AdbParser.Core.Execution;
+using AdbParser.Core.Parsers;
 using AdbParser.Core.Registry;
 using AdbParser.Core.Screen;
 using AdbParser.Core.Video;
@@ -18,6 +19,14 @@ namespace AdbParser.Gui;
 
 public partial class MainWindow : Window
 {
+    private sealed class DeviceChoice
+    {
+        public string Label { get; init; } = "";
+        public string? Serial { get; init; }
+        public string Status { get; init; } = "";
+        public override string ToString() => Label;
+    }
+
     private static readonly (string Label, int? Width, int? Height)[] ResolutionPresets =
     [
         ("Native", null, null),
@@ -72,6 +81,7 @@ public partial class MainWindow : Window
     private double _renderedFps;
     private DateTime _lastStatsSampleUtc = DateTime.UtcNow;
     private readonly DispatcherTimer _statsTimer;
+    private readonly List<DeviceChoice> _deviceChoices = [];
 
     private int _currentFrameWidth;
     private int _currentFrameHeight;
@@ -102,7 +112,7 @@ public partial class MainWindow : Window
         UpdateStatsText();
         UpdateFooter();
         SetStatus("Ready. Choose an action or start mirror.");
-        await Task.CompletedTask;
+        await RefreshDevicesListAsync(selectFirstOnline: true);
     }
 
     private async void OnClosed(object? sender, EventArgs e)
@@ -114,6 +124,15 @@ public partial class MainWindow : Window
 
     private void ConfigureControls()
     {
+        DeviceCombo.ItemsSource = _deviceChoices;
+        DeviceCombo.SelectionChanged += (_, _) =>
+        {
+            UpdateDeviceStatus();
+            UpdateFooter();
+        };
+        RefreshDevicesButton.Click += async (_, _) =>
+            await RunAdbActionAsync("Refresh devices", RefreshDevicesOutputAsync);
+
         ResolutionCombo.ItemsSource = Array.ConvertAll(ResolutionPresets, p => p.Label);
         BitrateCombo.ItemsSource = Array.ConvertAll(BitratePresets, p => p.Label);
         RenderFpsCombo.ItemsSource = Array.ConvertAll(RenderFpsPresets, p => p.Label);
@@ -130,17 +149,52 @@ public partial class MainWindow : Window
         BitrateCombo.SelectionChanged += (_, _) => UpdateFooter();
         RenderFpsCombo.SelectionChanged += (_, _) => UpdateFooter();
 
-        DevicesButton.Click += async (_, _) => await RunAdbActionAsync("Devices", RunDevicesAsync);
+        DevicesButton.Click += async (_, _) => await RunAdbActionAsync("Devices", RefreshDevicesOutputAsync);
         GetPropButton.Click += async (_, _) => await RunAdbActionAsync("GetProp", RunGetPropAsync);
         PackagesButton.Click += async (_, _) => await RunAdbActionAsync("Packages", RunPackagesAsync);
         BatteryButton.Click += async (_, _) => await RunAdbActionAsync("Battery", RunBatteryAsync);
         ScreenshotButton.Click += async (_, _) => await RunAdbActionAsync("Screenshot", RunScreenshotAsync);
         RecordButton.Click += async (_, _) => await RunAdbActionAsync("Record 5s", RunRecord5sAsync);
+        TopActivityButton.Click += async (_, _) => await RunAdbActionAsync("Top Activity", () => RunNamedShellCommandAsync("Top Activity", "dumpsys activity top"));
+        DisplayInfoButton.Click += async (_, _) => await RunAdbActionAsync("Display Info", () => RunNamedShellCommandAsync("Display Info", "dumpsys display"));
+
+        WmSizeButton.Click += async (_, _) => await RunAdbActionAsync("WM Size", () => RunNamedShellCommandAsync("WM Size", "wm size"));
+        WmDensityButton.Click += async (_, _) => await RunAdbActionAsync("WM Density", () => RunNamedShellCommandAsync("WM Density", "wm density"));
+        WindowInfoButton.Click += async (_, _) => await RunAdbActionAsync("Window Info", () => RunNamedShellCommandAsync("Window Info", "dumpsys window"));
+        RotationSettingsButton.Click += async (_, _) => await RunAdbActionAsync("Rotation Settings", RunRotationSettingsAsync);
+        RefreshRatesButton.Click += async (_, _) => await RunAdbActionAsync("Refresh Rates", RunRefreshRateSettingsAsync);
+        DisplayModesButton.Click += async (_, _) => await RunAdbActionAsync("Display Modes", RunDisplayModesAsync);
+
+        UserPackagesButton.Click += async (_, _) => await RunAdbActionAsync("User Packages", () => RunNamedShellCommandAsync("User Packages", "pm list packages -3"));
+        SystemPackagesButton.Click += async (_, _) => await RunAdbActionAsync("System Packages", () => RunNamedShellCommandAsync("System Packages", "pm list packages -s"));
+        MemInfoButton.Click += async (_, _) => await RunAdbActionAsync("MemInfo", () => RunNamedShellCommandAsync("MemInfo", "dumpsys meminfo"));
+        ActivityStackButton.Click += async (_, _) => await RunAdbActionAsync("Activities", () => RunNamedShellCommandAsync("Activities", "dumpsys activity activities"));
+        ProcessesButton.Click += async (_, _) => await RunAdbActionAsync("Processes", () => RunNamedShellCommandAsync("Processes", "ps -A"));
+        StorageButton.Click += async (_, _) => await RunAdbActionAsync("Storage", () => RunNamedShellCommandAsync("Storage", "df -h"));
+
+        HomeButton.Click += async (_, _) => await RunAdbActionAsync("Input Home", () => RunNamedShellCommandAsync("Input Home", "input keyevent KEYCODE_HOME"));
+        BackButton.Click += async (_, _) => await RunAdbActionAsync("Input Back", () => RunNamedShellCommandAsync("Input Back", "input keyevent KEYCODE_BACK"));
+        RecentsButton.Click += async (_, _) => await RunAdbActionAsync("Input Recents", () => RunNamedShellCommandAsync("Input Recents", "input keyevent KEYCODE_APP_SWITCH"));
+        PowerButton.Click += async (_, _) => await RunAdbActionAsync("Input Power", () => RunNamedShellCommandAsync("Input Power", "input keyevent KEYCODE_POWER"));
+        VolUpButton.Click += async (_, _) => await RunAdbActionAsync("Volume Up", () => RunNamedShellCommandAsync("Volume Up", "input keyevent KEYCODE_VOLUME_UP"));
+        VolDownButton.Click += async (_, _) => await RunAdbActionAsync("Volume Down", () => RunNamedShellCommandAsync("Volume Down", "input keyevent KEYCODE_VOLUME_DOWN"));
+        NotificationsButton.Click += async (_, _) => await RunAdbActionAsync("Notifications", () => RunNamedShellCommandAsync("Notifications", "cmd statusbar expand-notifications"));
+        QuickSettingsButton.Click += async (_, _) => await RunAdbActionAsync("Quick Settings", () => RunNamedShellCommandAsync("Quick Settings", "cmd statusbar expand-settings"));
+
         RunShellButton.Click += async (_, _) => await RunAdbActionAsync("Shell", RunCustomShellAsync);
+        ShellDisplayQuickButton.Click += (_, _) =>
+            ShellCommandTextBox.Text = "dumpsys display";
+        ShellWindowQuickButton.Click += (_, _) =>
+            ShellCommandTextBox.Text = "dumpsys window";
+        ShellBatteryQuickButton.Click += (_, _) =>
+            ShellCommandTextBox.Text = "dumpsys battery";
+        ShellSurfaceQuickButton.Click += (_, _) =>
+            ShellCommandTextBox.Text = "dumpsys SurfaceFlinger";
         ClearOutputButton.Click += (_, _) => ClearOutput();
 
         FrameInfoText.Text = "No frame yet";
         ActionStatusText.Text = "Ready";
+        DeviceStatusText.Text = "Devices: not loaded";
         SetStatus("Disconnected");
     }
 
@@ -151,6 +205,112 @@ public partial class MainWindow : Window
 
         AdbParserSetup.RegisterParsers();
         _parsersRegistered = true;
+    }
+
+    private string? GetSelectedDeviceSerial()
+        => (DeviceCombo.SelectedItem as DeviceChoice)?.Serial;
+
+    private string GetSelectedDeviceLabel()
+        => (DeviceCombo.SelectedItem as DeviceChoice)?.Label ?? "Auto";
+
+    private async Task RefreshDevicesListAsync(bool selectFirstOnline = false)
+    {
+        var previousSelectedSerial = GetSelectedDeviceSerial();
+
+        var result = await AdbExecutor.RunAsync(AdbCommand.Devices());
+        var devices = result.Data as List<DeviceInfo> ?? [];
+
+        _deviceChoices.Clear();
+        _deviceChoices.Add(new DeviceChoice
+        {
+            Label = "Auto (adb default)",
+            Serial = null,
+            Status = "auto"
+        });
+
+        foreach (var device in devices.OrderBy(d => d.Serial, StringComparer.Ordinal))
+        {
+            var status = string.IsNullOrWhiteSpace(device.Status) ? "unknown" : device.Status;
+            _deviceChoices.Add(new DeviceChoice
+            {
+                Label = $"{device.Serial} ({status})",
+                Serial = device.Serial,
+                Status = status
+            });
+        }
+
+        DeviceCombo.ItemsSource = null;
+        DeviceCombo.ItemsSource = _deviceChoices;
+
+        DeviceChoice? selection = null;
+        if (!string.IsNullOrWhiteSpace(previousSelectedSerial))
+        {
+            selection = _deviceChoices.FirstOrDefault(d =>
+                string.Equals(d.Serial, previousSelectedSerial, StringComparison.Ordinal));
+        }
+
+        if (selection is null && selectFirstOnline)
+        {
+            selection = _deviceChoices.FirstOrDefault(d =>
+                string.Equals(d.Status, "device", StringComparison.OrdinalIgnoreCase));
+        }
+
+        DeviceCombo.SelectedItem = selection ?? _deviceChoices[0];
+        UpdateDeviceStatus();
+    }
+
+    private async Task<string> RefreshDevicesOutputAsync()
+    {
+        await RefreshDevicesListAsync(selectFirstOnline: false);
+        return await RunDevicesAsync();
+    }
+
+    private void UpdateDeviceStatus()
+    {
+        var online = _deviceChoices.Count(d =>
+            !string.IsNullOrWhiteSpace(d.Serial) &&
+            string.Equals(d.Status, "device", StringComparison.OrdinalIgnoreCase));
+        var total = _deviceChoices.Count - 1; // exclude auto
+        var selected = GetSelectedDeviceLabel();
+
+        DeviceStatusText.Text = $"Devices: {online}/{total} online | Selected: {selected}";
+    }
+
+    private async Task<AdbResult<object>> RunSelectedDeviceCommandAsync(AdbCommand command)
+        => await AdbExecutor.RunAsync(command, GetSelectedDeviceSerial());
+
+    private async Task<string> RunNamedShellCommandAsync(string title, string shellCommand)
+    {
+        _ = title;
+        var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(shellCommand));
+        return $"$ adb {BuildDeviceSelectorPreview()}shell {shellCommand}\n\n" + FormatParsedResult(result);
+    }
+
+    private async Task<string> RunShellBatchAsync(params (string Label, string Command)[] commands)
+    {
+        var sb = new StringBuilder();
+
+        foreach (var (label, command) in commands)
+        {
+            sb.AppendLine($"## {label}");
+            try
+            {
+                sb.AppendLine(await RunNamedShellCommandAsync(label, command));
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"ERROR: {FirstLine(ex.Message)}");
+            }
+            sb.AppendLine();
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private string BuildDeviceSelectorPreview()
+    {
+        var serial = GetSelectedDeviceSerial();
+        return string.IsNullOrWhiteSpace(serial) ? "" : $"-s {serial} ";
     }
 
     private async Task RunStreamOpAsync(Func<Task> operation)
@@ -216,19 +376,19 @@ public partial class MainWindow : Window
 
     private async Task<string> RunGetPropAsync()
     {
-        var result = await AdbExecutor.RunAsync(AdbCommand.GetProp());
+        var result = await RunSelectedDeviceCommandAsync(AdbCommand.GetProp());
         return FormatParsedResult(result);
     }
 
     private async Task<string> RunPackagesAsync()
     {
-        var result = await AdbExecutor.RunAsync(AdbCommand.ListPackages());
+        var result = await RunSelectedDeviceCommandAsync(AdbCommand.ListPackages());
         return FormatParsedResult(result);
     }
 
     private async Task<string> RunBatteryAsync()
     {
-        var result = await AdbExecutor.RunAsync(AdbCommand.Shell("dumpsys battery"));
+        var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell("dumpsys battery"));
         return FormatParsedResult(result);
     }
 
@@ -238,22 +398,23 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(shellCommand))
             throw new InvalidOperationException("Shell command is empty.");
 
-        var result = await AdbExecutor.RunAsync(AdbCommand.Shell(shellCommand));
-        return $"$ adb shell {shellCommand}\n\n" + FormatParsedResult(result);
+        var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(shellCommand));
+        return $"$ adb {BuildDeviceSelectorPreview()}shell {shellCommand}\n\n" + FormatParsedResult(result);
     }
 
     private async Task<string> RunScreenshotAsync()
     {
         var result = await AdbExecutor.RunBinaryAsync(
             "exec-out",
-            "screencap -p"
+            "screencap -p",
+            GetSelectedDeviceSerial()
         );
 
         var fileName = $"screen_{DateTime.Now:yyyyMMdd_HHmmss}.png";
         await using var file = File.Create(fileName);
         await result.DataStream.CopyToAsync(file);
 
-        return $"Screenshot saved to {fileName}";
+        return $"Screenshot saved to {fileName}\nDevice: {GetSelectedDeviceLabel()}";
     }
 
     private async Task<string> RunRecord5sAsync()
@@ -261,7 +422,8 @@ public partial class MainWindow : Window
         var fileName = $"record_{DateTime.Now:yyyyMMdd_HHmmss}.h264";
         using var adb = AdbExecutor.RunBinaryStream(
             "exec-out",
-            "screenrecord --output-format=h264 -"
+            "screenrecord --output-format=h264 -",
+            GetSelectedDeviceSerial()
         );
 
         await using var file = File.Create(fileName);
@@ -276,8 +438,27 @@ public partial class MainWindow : Window
             // Expected after 5 seconds.
         }
 
-        return $"Recorded ~5s to {fileName}";
+        return $"Recorded ~5s to {fileName}\nDevice: {GetSelectedDeviceLabel()}";
     }
+
+    private Task<string> RunRefreshRateSettingsAsync()
+        => RunShellBatchAsync(
+            ("peak_refresh_rate", "settings get system peak_refresh_rate"),
+            ("min_refresh_rate", "settings get system min_refresh_rate"),
+            ("user_refresh_rate", "settings get system user_refresh_rate"),
+            ("fps_dev_override", "settings get system min_refresh_rate_for_video"));
+
+    private Task<string> RunRotationSettingsAsync()
+        => RunShellBatchAsync(
+            ("accelerometer_rotation", "settings get system accelerometer_rotation"),
+            ("user_rotation", "settings get system user_rotation"),
+            ("wm size", "wm size"));
+
+    private Task<string> RunDisplayModesAsync()
+        => RunShellBatchAsync(
+            ("dumpsys display", "dumpsys display"),
+            ("cmd display get-active-display-mode", "cmd display get-active-display-mode"),
+            ("cmd display get-displays", "cmd display get-displays"));
 
     private string FormatParsedResult(AdbResult<object> result)
     {
@@ -390,7 +571,7 @@ public partial class MainWindow : Window
 
         _cts = cts;
         _isStopping = false;
-        SetStatus("Connecting to device...");
+        SetStatus($"Connecting to {GetSelectedDeviceLabel()}...");
         UpdateControlState();
 
         _producerTask = RunProducerAsync(service, decoder, buffer, options, cts);
@@ -599,7 +780,11 @@ public partial class MainWindow : Window
 
         try
         {
-            _ = Dispatcher.UIThread.InvokeAsync(() => SetStatus(message));
+            _ = Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                SetStatus(message);
+                AppendOutput("Mirror error", message);
+            });
         }
         catch
         {
@@ -637,6 +822,7 @@ public partial class MainWindow : Window
 
         return new ScreenStreamOptions
         {
+            DeviceSerial = GetSelectedDeviceSerial(),
             Width = resolution.Width,
             Height = resolution.Height,
             BitRate = bitrate.BitRate,
@@ -714,9 +900,10 @@ public partial class MainWindow : Window
         var res = ResolutionPresets[ClampIndex(ResolutionCombo.SelectedIndex, ResolutionPresets.Length)].Label;
         var bitrate = BitratePresets[ClampIndex(BitrateCombo.SelectedIndex, BitratePresets.Length)].Label;
         var renderCap = RenderFpsPresets[ClampIndex(RenderFpsCombo.SelectedIndex, RenderFpsPresets.Length)].Label;
+        var device = GetSelectedDeviceLabel();
 
         FooterText.Text =
-            $"Preset: {res}, {bitrate}, render cap {renderCap}. " +
+            $"Device: {device} | Preset: {res}, {bitrate}, render cap {renderCap}. " +
             "Settings apply on Start/Reconnect. Lower bitrate/resolution if latency is high.";
     }
 
@@ -735,14 +922,42 @@ public partial class MainWindow : Window
         RenderFpsCombo.IsEnabled = !running;
 
         var actionControlsEnabled = !_adbActionBusy;
+        DeviceCombo.IsEnabled = actionControlsEnabled;
+        RefreshDevicesButton.IsEnabled = actionControlsEnabled;
         DevicesButton.IsEnabled = actionControlsEnabled;
         GetPropButton.IsEnabled = actionControlsEnabled;
         PackagesButton.IsEnabled = actionControlsEnabled;
         BatteryButton.IsEnabled = actionControlsEnabled;
         ScreenshotButton.IsEnabled = actionControlsEnabled;
         RecordButton.IsEnabled = actionControlsEnabled;
+        TopActivityButton.IsEnabled = actionControlsEnabled;
+        DisplayInfoButton.IsEnabled = actionControlsEnabled;
+        WmSizeButton.IsEnabled = actionControlsEnabled;
+        WmDensityButton.IsEnabled = actionControlsEnabled;
+        WindowInfoButton.IsEnabled = actionControlsEnabled;
+        RotationSettingsButton.IsEnabled = actionControlsEnabled;
+        RefreshRatesButton.IsEnabled = actionControlsEnabled;
+        DisplayModesButton.IsEnabled = actionControlsEnabled;
+        UserPackagesButton.IsEnabled = actionControlsEnabled;
+        SystemPackagesButton.IsEnabled = actionControlsEnabled;
+        MemInfoButton.IsEnabled = actionControlsEnabled;
+        ActivityStackButton.IsEnabled = actionControlsEnabled;
+        ProcessesButton.IsEnabled = actionControlsEnabled;
+        StorageButton.IsEnabled = actionControlsEnabled;
+        HomeButton.IsEnabled = actionControlsEnabled;
+        BackButton.IsEnabled = actionControlsEnabled;
+        RecentsButton.IsEnabled = actionControlsEnabled;
+        PowerButton.IsEnabled = actionControlsEnabled;
+        VolUpButton.IsEnabled = actionControlsEnabled;
+        VolDownButton.IsEnabled = actionControlsEnabled;
+        NotificationsButton.IsEnabled = actionControlsEnabled;
+        QuickSettingsButton.IsEnabled = actionControlsEnabled;
         RunShellButton.IsEnabled = actionControlsEnabled;
         ShellCommandTextBox.IsEnabled = actionControlsEnabled;
+        ShellDisplayQuickButton.IsEnabled = actionControlsEnabled;
+        ShellWindowQuickButton.IsEnabled = actionControlsEnabled;
+        ShellBatteryQuickButton.IsEnabled = actionControlsEnabled;
+        ShellSurfaceQuickButton.IsEnabled = actionControlsEnabled;
         ClearOutputButton.IsEnabled = actionControlsEnabled;
     }
 
