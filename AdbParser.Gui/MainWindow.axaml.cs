@@ -1,10 +1,16 @@
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using AdbParser.Core.Execution;
+using AdbParser.Core.Registry;
 using AdbParser.Core.Screen;
 using AdbParser.Core.Video;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,6 +39,12 @@ public partial class MainWindow : Window
     private static readonly (string Label, int? FpsCap)[] RenderFpsPresets =
     [
         ("Unlimited", null),
+        ("240", 240),
+        ("165", 165),
+        ("144", 144),
+        ("120", 120),
+        ("90", 90),
+        ("75", 75),
         ("60", 60),
         ("30", 30),
         ("20", 20),
@@ -47,6 +59,10 @@ public partial class MainWindow : Window
 
     private bool _isStopping;
     private bool _isClosing;
+    private bool _adbActionBusy;
+
+    private readonly SemaphoreSlim _streamOpsGate = new(1, 1);
+    private readonly SemaphoreSlim _adbActionGate = new(1, 1);
 
     private long _decodedFrameCount;
     private long _renderedFrameCount;
@@ -61,11 +77,13 @@ public partial class MainWindow : Window
     private int _currentFrameHeight;
     private long _lastRenderTicksUtc;
     private int? _renderFpsCap;
+    private bool _parsersRegistered;
 
     public MainWindow()
     {
         InitializeComponent();
 
+        EnsureParsersRegistered();
         ConfigureControls();
         _statsTimer = new DispatcherTimer
         {
@@ -83,14 +101,15 @@ public partial class MainWindow : Window
         UpdateControlState();
         UpdateStatsText();
         UpdateFooter();
-        await StartStreamingAsync();
+        SetStatus("Ready. Choose an action or start mirror.");
+        await Task.CompletedTask;
     }
 
     private async void OnClosed(object? sender, EventArgs e)
     {
         _isClosing = true;
         _statsTimer.Stop();
-        await StopStreamingAsync(windowClosing: true);
+        await RunStreamOpAsync(() => StopStreamingAsync(windowClosing: true));
     }
 
     private void ConfigureControls()
@@ -103,16 +122,230 @@ public partial class MainWindow : Window
         BitrateCombo.SelectedIndex = 1; // 8 Mbps default
         RenderFpsCombo.SelectedIndex = 0; // Unlimited (lower latency)
 
-        StartButton.Click += async (_, _) => await StartStreamingAsync();
-        StopButton.Click += async (_, _) => await StopStreamingAsync();
-        ReconnectButton.Click += async (_, _) => await ReconnectAsync();
+        StartButton.Click += async (_, _) => await RunStreamOpAsync(StartStreamingAsync);
+        StopButton.Click += async (_, _) => await RunStreamOpAsync(() => StopStreamingAsync());
+        ReconnectButton.Click += async (_, _) => await RunStreamOpAsync(ReconnectAsync);
 
         ResolutionCombo.SelectionChanged += (_, _) => UpdateFooter();
         BitrateCombo.SelectionChanged += (_, _) => UpdateFooter();
         RenderFpsCombo.SelectionChanged += (_, _) => UpdateFooter();
 
+        DevicesButton.Click += async (_, _) => await RunAdbActionAsync("Devices", RunDevicesAsync);
+        GetPropButton.Click += async (_, _) => await RunAdbActionAsync("GetProp", RunGetPropAsync);
+        PackagesButton.Click += async (_, _) => await RunAdbActionAsync("Packages", RunPackagesAsync);
+        BatteryButton.Click += async (_, _) => await RunAdbActionAsync("Battery", RunBatteryAsync);
+        ScreenshotButton.Click += async (_, _) => await RunAdbActionAsync("Screenshot", RunScreenshotAsync);
+        RecordButton.Click += async (_, _) => await RunAdbActionAsync("Record 5s", RunRecord5sAsync);
+        RunShellButton.Click += async (_, _) => await RunAdbActionAsync("Shell", RunCustomShellAsync);
+        ClearOutputButton.Click += (_, _) => ClearOutput();
+
         FrameInfoText.Text = "No frame yet";
+        ActionStatusText.Text = "Ready";
         SetStatus("Disconnected");
+    }
+
+    private void EnsureParsersRegistered()
+    {
+        if (_parsersRegistered)
+            return;
+
+        AdbParserSetup.RegisterParsers();
+        _parsersRegistered = true;
+    }
+
+    private async Task RunStreamOpAsync(Func<Task> operation)
+    {
+        await _streamOpsGate.WaitAsync();
+        try
+        {
+            await operation();
+        }
+        catch (Exception ex)
+        {
+            if (!_isClosing)
+            {
+                SetStatus($"UI error: {FirstLine(ex.Message)}");
+            }
+        }
+        finally
+        {
+            _streamOpsGate.Release();
+        }
+    }
+
+    private async Task RunAdbActionAsync(string label, Func<Task<string>> action)
+    {
+        if (_isClosing)
+            return;
+
+        if (!await _adbActionGate.WaitAsync(0))
+        {
+            SetActionStatus("Another ADB action is already running...");
+            return;
+        }
+
+        _adbActionBusy = true;
+        UpdateControlState();
+        SetActionStatus($"{label} running...");
+
+        try
+        {
+            var content = await action();
+            AppendOutput(label, content);
+            SetActionStatus($"{label} completed");
+        }
+        catch (Exception ex)
+        {
+            var message = FirstLine(ex.Message);
+            AppendOutput($"{label} ERROR", ex.ToString());
+            SetActionStatus($"{label} failed: {message}");
+        }
+        finally
+        {
+            _adbActionBusy = false;
+            UpdateControlState();
+            _adbActionGate.Release();
+        }
+    }
+
+    private async Task<string> RunDevicesAsync()
+    {
+        var result = await AdbExecutor.RunAsync(AdbCommand.Devices());
+        return FormatParsedResult(result);
+    }
+
+    private async Task<string> RunGetPropAsync()
+    {
+        var result = await AdbExecutor.RunAsync(AdbCommand.GetProp());
+        return FormatParsedResult(result);
+    }
+
+    private async Task<string> RunPackagesAsync()
+    {
+        var result = await AdbExecutor.RunAsync(AdbCommand.ListPackages());
+        return FormatParsedResult(result);
+    }
+
+    private async Task<string> RunBatteryAsync()
+    {
+        var result = await AdbExecutor.RunAsync(AdbCommand.Shell("dumpsys battery"));
+        return FormatParsedResult(result);
+    }
+
+    private async Task<string> RunCustomShellAsync()
+    {
+        var shellCommand = (ShellCommandTextBox.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(shellCommand))
+            throw new InvalidOperationException("Shell command is empty.");
+
+        var result = await AdbExecutor.RunAsync(AdbCommand.Shell(shellCommand));
+        return $"$ adb shell {shellCommand}\n\n" + FormatParsedResult(result);
+    }
+
+    private async Task<string> RunScreenshotAsync()
+    {
+        var result = await AdbExecutor.RunBinaryAsync(
+            "exec-out",
+            "screencap -p"
+        );
+
+        var fileName = $"screen_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+        await using var file = File.Create(fileName);
+        await result.DataStream.CopyToAsync(file);
+
+        return $"Screenshot saved to {fileName}";
+    }
+
+    private async Task<string> RunRecord5sAsync()
+    {
+        var fileName = $"record_{DateTime.Now:yyyyMMdd_HHmmss}.h264";
+        using var adb = AdbExecutor.RunBinaryStream(
+            "exec-out",
+            "screenrecord --output-format=h264 -"
+        );
+
+        await using var file = File.Create(fileName);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        try
+        {
+            await adb.Output.CopyToAsync(file, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected after 5 seconds.
+        }
+
+        return $"Recorded ~5s to {fileName}";
+    }
+
+    private string FormatParsedResult(AdbResult<object> result)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Parser: {result.ParserKey}");
+        sb.AppendLine();
+        sb.AppendLine("Data:");
+        sb.Append(FormatObject(result.Data));
+
+        if (!string.IsNullOrWhiteSpace(result.RawOutput))
+        {
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.AppendLine("Raw output:");
+            sb.Append(result.RawOutput.TrimEnd());
+        }
+
+        return sb.ToString();
+    }
+
+    private static string FormatObject(object? data)
+    {
+        if (data is null)
+            return "(null)";
+
+        if (data is IEnumerable<string> strings)
+            return string.Join(Environment.NewLine, strings);
+
+        if (data is IReadOnlyDictionary<string, string> dict)
+        {
+            var sb = new StringBuilder();
+            foreach (var kv in dict.OrderBy(k => k.Key, StringComparer.Ordinal))
+            {
+                sb.AppendLine($"{kv.Key} = {kv.Value}");
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        if (data is System.Collections.IEnumerable enumerable and not string)
+        {
+            var sb = new StringBuilder();
+            foreach (var item in enumerable)
+            {
+                sb.AppendLine(item?.ToString());
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        return data.ToString() ?? "(null)";
+    }
+
+    private void AppendOutput(string title, string body)
+    {
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        var block = $"[{timestamp}] {title}\n{body.TrimEnd()}\n\n";
+        OutputTextBox.Text = (OutputTextBox.Text ?? string.Empty) + block;
+        OutputTextBox.CaretIndex = OutputTextBox.Text.Length;
+    }
+
+    private void ClearOutput()
+    {
+        OutputTextBox.Text = string.Empty;
+        SetActionStatus("Output cleared");
+    }
+
+    private void SetActionStatus(string text)
+    {
+        ActionStatusText.Text = text;
     }
 
     private async Task StartStreamingAsync()
@@ -491,14 +724,26 @@ public partial class MainWindow : Window
     {
         var hasSession = _cts is not null;
         var running = hasSession && !_isStopping && !(_cts?.IsCancellationRequested ?? true);
+        var streamControlsLocked = _isStopping;
 
-        StartButton.IsEnabled = !hasSession;
-        StopButton.IsEnabled = hasSession;
-        ReconnectButton.IsEnabled = !_isStopping;
+        StartButton.IsEnabled = !hasSession && !streamControlsLocked;
+        StopButton.IsEnabled = hasSession && !streamControlsLocked;
+        ReconnectButton.IsEnabled = !streamControlsLocked;
 
         ResolutionCombo.IsEnabled = !running;
         BitrateCombo.IsEnabled = !running;
         RenderFpsCombo.IsEnabled = !running;
+
+        var actionControlsEnabled = !_adbActionBusy;
+        DevicesButton.IsEnabled = actionControlsEnabled;
+        GetPropButton.IsEnabled = actionControlsEnabled;
+        PackagesButton.IsEnabled = actionControlsEnabled;
+        BatteryButton.IsEnabled = actionControlsEnabled;
+        ScreenshotButton.IsEnabled = actionControlsEnabled;
+        RecordButton.IsEnabled = actionControlsEnabled;
+        RunShellButton.IsEnabled = actionControlsEnabled;
+        ShellCommandTextBox.IsEnabled = actionControlsEnabled;
+        ClearOutputButton.IsEnabled = actionControlsEnabled;
     }
 
     private void ReleaseSessionState(CancellationTokenSource cts)

@@ -74,40 +74,136 @@
       </Grid>
     </Border>
 
-    <Border Grid.Row="1"
-            Margin="12"
-            Background="#090C10"
-            BorderBrush="#2A3947"
-            BorderThickness="1"
-            CornerRadius="10"
-            ClipToBounds="True">
-      <Grid>
-        <Image x:Name="ScreenImage"
-               Stretch="Uniform"/>
+    <Grid Grid.Row="1"
+          Margin="12"
+          ColumnDefinitions="360,12,*">
+      <Border Grid.Column="0"
+              Background="#111821"
+              BorderBrush="#2A3947"
+              BorderThickness="1"
+              CornerRadius="10"
+              Padding="12">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+              RowSpacing="10">
+          <TextBlock Text="ADB Tools"
+                     FontSize="18"
+                     FontWeight="SemiBold"
+                     Foreground="#E6EDF5"/>
 
-        <Border HorizontalAlignment="Left"
-                VerticalAlignment="Top"
-                Margin="12"
-                Background="#B2141A21"
-                CornerRadius="8"
-                Padding="8,4">
-          <TextBlock x:Name="FrameInfoText"
-                     Text="No frame yet"
-                     Foreground="#EAF2F8"/>
-        </Border>
+          <WrapPanel Grid.Row="1"
+                     ItemHeight="34"
+                     ItemWidth="160"
+                     Orientation="Horizontal">
+            <Button x:Name="DevicesButton"
+                    Content="Devices"
+                    Margin="0,0,8,8"/>
+            <Button x:Name="GetPropButton"
+                    Content="GetProp"
+                    Margin="0,0,8,8"/>
+            <Button x:Name="PackagesButton"
+                    Content="Packages"
+                    Margin="0,0,8,8"/>
+            <Button x:Name="BatteryButton"
+                    Content="Battery"
+                    Margin="0,0,8,8"/>
+            <Button x:Name="ScreenshotButton"
+                    Content="Screenshot"
+                    Margin="0,0,8,8"/>
+            <Button x:Name="RecordButton"
+                    Content="Record 5s"
+                    Margin="0,0,8,8"/>
+          </WrapPanel>
 
-        <Border HorizontalAlignment="Left"
-                VerticalAlignment="Bottom"
-                Margin="12"
-                Background="#B2141A21"
-                CornerRadius="8"
-                Padding="8,4">
-          <TextBlock x:Name="StatusText"
-                     Text="Status: Disconnected"
-                     Foreground="#EAF2F8"/>
-        </Border>
-      </Grid>
-    </Border>
+          <Grid Grid.Row="2"
+                ColumnDefinitions="*,Auto"
+                ColumnSpacing="8">
+            <TextBox x:Name="ShellCommandTextBox"
+                     Watermark="adb shell command (e.g. dumpsys display)"
+                     Text="dumpsys display"/>
+            <Button x:Name="RunShellButton"
+                    Grid.Column="1"
+                    Content="Run shell"
+                    MinWidth="90"/>
+          </Grid>
+
+          <Grid Grid.Row="3"
+                ColumnDefinitions="Auto,*"
+                ColumnSpacing="8">
+            <Button x:Name="ClearOutputButton"
+                    Content="Clear output"
+                    MinWidth="100"/>
+            <TextBlock x:Name="ActionStatusText"
+                       Grid.Column="1"
+                       VerticalAlignment="Center"
+                       Text="Ready"
+                       Foreground="#9EB3C7"
+                       TextTrimming="CharacterEllipsis"/>
+          </Grid>
+
+          <Border Grid.Row="4"
+                  Background="#0A1015"
+                  BorderBrush="#22303C"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Padding="8">
+            <TextBox x:Name="OutputTextBox"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     Background="Transparent"
+                     Foreground="#D7E2EE"
+                     BorderThickness="0"
+                     FontFamily="Consolas"
+                     Text="ADB GUI ready. Use the buttons above to run commands."/>
+          </Border>
+
+          <Border Grid.Row="5"
+                  Background="#151F28"
+                  BorderBrush="#22303C"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Padding="8">
+            <TextBlock Text="Tip: mirror can keep running while you inspect ADB output. Some devices require Reconnect after rotation to renegotiate screenrecord parameters."
+                       Foreground="#AFC2D4"
+                       TextWrapping="Wrap"/>
+          </Border>
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="2"
+              Background="#090C10"
+              BorderBrush="#2A3947"
+              BorderThickness="1"
+              CornerRadius="10"
+              ClipToBounds="True">
+        <Grid>
+          <Image x:Name="ScreenImage"
+                 Stretch="Uniform"/>
+
+          <Border HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  Margin="12"
+                  Background="#B2141A21"
+                  CornerRadius="8"
+                  Padding="8,4">
+            <TextBlock x:Name="FrameInfoText"
+                       Text="No frame yet"
+                       Foreground="#EAF2F8"/>
+          </Border>
+
+          <Border HorizontalAlignment="Left"
+                  VerticalAlignment="Bottom"
+                  Margin="12"
+                  Background="#B2141A21"
+                  CornerRadius="8"
+                  Padding="8,4">
+            <TextBlock x:Name="StatusText"
+                       Text="Status: Disconnected"
+                       Foreground="#EAF2F8"/>
+          </Border>
+        </Grid>
+      </Border>
+    </Grid>
 
     <Border Grid.Row="2"
             Background="#121A22"
