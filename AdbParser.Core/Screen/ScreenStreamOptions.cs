@@ -2,6 +2,7 @@ namespace AdbParser.Core.Screen;
 
 public sealed class ScreenStreamOptions
 {
+    public string? DeviceSerial { get; init; }
     public int? Width { get; init; }
     public int? Height { get; init; }
     public int BitRate { get; init; } = 8_000_000;

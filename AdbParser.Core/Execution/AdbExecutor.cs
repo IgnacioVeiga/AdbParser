@@ -5,12 +5,15 @@ namespace AdbParser.Core.Execution;
 
 public static class AdbExecutor
 {
-    public static async Task<AdbResult<object>> RunAsync(AdbCommand command)
+    public static async Task<AdbResult<object>> RunAsync(AdbCommand command, string? deviceSerial = null)
     {
         var psi = new ProcessStartInfo
         {
             FileName = "adb",
-            Arguments = $"{command.Command} {command.Arguments}".Trim(),
+            Arguments = BuildArguments(
+                command.Command,
+                command.Arguments,
+                deviceSerial),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -45,13 +48,17 @@ public static class AdbExecutor
     }
 
     public static async Task<AdbBinaryResult> RunBinaryAsync(
-    string command,
-    string arguments = "")
+        string command,
+        string arguments = "",
+        string? deviceSerial = null)
     {
         var psi = new ProcessStartInfo
         {
             FileName = "adb",
-            Arguments = $"{command} {arguments}".Trim(),
+            Arguments = BuildArguments(
+                command,
+                arguments,
+                deviceSerial),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -83,12 +90,16 @@ public static class AdbExecutor
 
     public static AdbBinaryProcess RunBinaryStream(
         string command,
-        string arguments = "")
+        string arguments = "",
+        string? deviceSerial = null)
     {
         var psi = new ProcessStartInfo
         {
             FileName = "adb",
-            Arguments = $"{command} {arguments}".Trim(),
+            Arguments = BuildArguments(
+                command,
+                arguments,
+                deviceSerial),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -101,4 +112,15 @@ public static class AdbExecutor
         return new AdbBinaryProcess(process);
     }
 
+    private static string BuildArguments(string command, string arguments, string? deviceSerial)
+    {
+        var adbArgs = $"{command} {arguments}".Trim();
+        if (string.IsNullOrWhiteSpace(deviceSerial))
+            return adbArgs;
+
+        // ADB serials do not usually contain spaces, but quoting keeps the
+        // invocation resilient for emulator names / future variations.
+        var escapedSerial = deviceSerial.Replace("\"", "\\\"");
+        return $"-s \"{escapedSerial}\" {adbArgs}";
+    }
 }

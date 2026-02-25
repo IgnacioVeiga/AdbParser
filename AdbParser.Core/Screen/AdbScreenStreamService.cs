@@ -17,7 +17,8 @@ public sealed class AdbScreenStreamService(IH264Decoder decoder) : IScreenStream
 
         using var process = AdbExecutor.RunBinaryStream(
             "exec-out",
-            screenrecordArgs
+            screenrecordArgs,
+            options.DeviceSerial
         );
 
         var buffer = new byte[64 * 1024];
