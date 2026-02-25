@@ -94,12 +94,14 @@ public partial class MainWindow : Window
     private bool _isClosing;
     private bool _adbActionBusy;
     private bool _suppressViewModeSelectionChange;
+    private bool _suppressSettingsPersistence;
     private WindowState _windowStateBeforeFullscreen = WindowState.Normal;
     private MirrorViewMode _lastNonFullscreenViewMode = MirrorViewMode.Normal;
     private GridLength _savedToolboxWidth = new(410);
     private GridLength _savedOutputHeight = new(240);
     private IReadOnlyList<Control> _adbActionControls = [];
     private IReadOnlyList<Control> _toolsCategoryPanels = [];
+    private string? _preferredDeviceSerialFromSettings;
 
     private readonly SemaphoreSlim _streamOpsGate = new(1, 1);
     private readonly SemaphoreSlim _adbActionGate = new(1, 1);
@@ -113,6 +115,7 @@ public partial class MainWindow : Window
     private DateTime _lastStatsSampleUtc = DateTime.UtcNow;
     private readonly DispatcherTimer _statsTimer;
     private readonly List<DeviceChoice> _deviceChoices = [];
+    private readonly GuiUserSettings _userSettings;
 
     private int _currentFrameWidth;
     private int _currentFrameHeight;
@@ -123,6 +126,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _userSettings = GuiUserSettingsStore.LoadOrDefault();
 
         EnsureParsersRegistered();
         ConfigureControls();
@@ -149,6 +153,7 @@ public partial class MainWindow : Window
     private async void OnClosed(object? sender, EventArgs e)
     {
         _isClosing = true;
+        SaveSettingsSafe();
         _statsTimer.Stop();
         await RunStreamOpAsync(() => StopStreamingAsync(windowClosing: true));
     }
@@ -160,6 +165,7 @@ public partial class MainWindow : Window
         {
             UpdateDeviceStatus();
             UpdateFooter();
+            PersistSettingsIfReady();
         };
         RefreshDevicesButton.Click += async (_, _) =>
             await RunAdbActionAsync("Refresh devices", RefreshDevicesOutputAsync);
@@ -180,15 +186,32 @@ public partial class MainWindow : Window
         StopButton.Click += async (_, _) => await RunStreamOpAsync(() => StopStreamingAsync());
         ReconnectButton.Click += async (_, _) => await RunStreamOpAsync(ReconnectAsync);
 
-        ResolutionCombo.SelectionChanged += (_, _) => UpdateFooter();
-        BitrateCombo.SelectionChanged += (_, _) => UpdateFooter();
-        RenderFpsCombo.SelectionChanged += (_, _) => UpdateFooter();
+        ResolutionCombo.SelectionChanged += (_, _) =>
+        {
+            UpdateFooter();
+            PersistSettingsIfReady();
+        };
+        BitrateCombo.SelectionChanged += (_, _) =>
+        {
+            UpdateFooter();
+            PersistSettingsIfReady();
+        };
+        RenderFpsCombo.SelectionChanged += (_, _) =>
+        {
+            UpdateFooter();
+            PersistSettingsIfReady();
+        };
         ViewModeCombo.SelectionChanged += (_, _) =>
         {
             if (!_suppressViewModeSelectionChange)
                 ApplyMirrorViewMode();
+            PersistSettingsIfReady();
         };
-        ToolsCategoryCombo.SelectionChanged += (_, _) => ApplyToolsCategorySelection();
+        ToolsCategoryCombo.SelectionChanged += (_, _) =>
+        {
+            ApplyToolsCategorySelection();
+            PersistSettingsIfReady();
+        };
 
         DevicesButton.Click += async (_, _) => await RunAdbActionAsync("Devices", RefreshDevicesOutputAsync);
         GetPropButton.Click += async (_, _) => await RunAdbActionAsync("GetProp", RunGetPropAsync);
@@ -236,11 +259,16 @@ public partial class MainWindow : Window
             ShellCommandTextBox.Text = "dumpsys battery";
         ShellSurfaceQuickButton.Click += (_, _) =>
             ShellCommandTextBox.Text = "dumpsys SurfaceFlinger";
+        ShellCommandTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
         CopyOutputButton.Click += async (_, _) => await CopyOutputToClipboardAsync();
         SaveOutputButton.Click += async (_, _) => await SaveOutputToFileAsync();
         ClearOutputButton.Click += (_, _) => ClearOutput();
+        InputTextTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
+        TapXTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
+        TapYTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
 
         InitializeControlGroups();
+        ApplyLoadedSettings();
         ApplyToolsCategorySelection();
         ApplyMirrorViewMode();
         FrameInfoText.Text = "No frame yet";
@@ -299,6 +327,12 @@ public partial class MainWindow : Window
         {
             selection = _deviceChoices.FirstOrDefault(d =>
                 string.Equals(d.Serial, previousSelectedSerial, StringComparison.Ordinal));
+        }
+
+        if (selection is null && !string.IsNullOrWhiteSpace(_preferredDeviceSerialFromSettings))
+        {
+            selection = _deviceChoices.FirstOrDefault(d =>
+                string.Equals(d.Serial, _preferredDeviceSerialFromSettings, StringComparison.Ordinal));
         }
 
         if (selection is null && selectFirstOnline)
@@ -421,6 +455,90 @@ public partial class MainWindow : Window
             TapCoordsButton,
             TapCenterButton
         ];
+    }
+
+    private void ApplyLoadedSettings()
+    {
+        _suppressSettingsPersistence = true;
+        _suppressViewModeSelectionChange = true;
+        try
+        {
+            if (_userSettings.ToolboxWidth is > 120)
+                _savedToolboxWidth = new GridLength(_userSettings.ToolboxWidth.Value);
+            if (_userSettings.OutputHeight is > 80)
+                _savedOutputHeight = new GridLength(_userSettings.OutputHeight.Value);
+
+            _preferredDeviceSerialFromSettings = string.IsNullOrWhiteSpace(_userSettings.PreferredDeviceSerial)
+                ? null
+                : _userSettings.PreferredDeviceSerial;
+
+            ResolutionCombo.SelectedIndex = ClampIndex(_userSettings.ResolutionIndex, ResolutionPresets.Length);
+            BitrateCombo.SelectedIndex = ClampIndex(_userSettings.BitrateIndex, BitratePresets.Length);
+            RenderFpsCombo.SelectedIndex = ClampIndex(_userSettings.RenderFpsIndex, RenderFpsPresets.Length);
+            ViewModeCombo.SelectedIndex = ClampIndex(_userSettings.ViewModeIndex, ViewModePresets.Length);
+            ToolsCategoryCombo.SelectedIndex = ClampIndex(_userSettings.ToolsCategoryIndex, ToolCategoryOptions.Length);
+
+            if (!string.IsNullOrWhiteSpace(_userSettings.ShellCommandText))
+                ShellCommandTextBox.Text = _userSettings.ShellCommandText;
+            if (!string.IsNullOrWhiteSpace(_userSettings.InputText))
+                InputTextTextBox.Text = _userSettings.InputText;
+            if (!string.IsNullOrWhiteSpace(_userSettings.TapX))
+                TapXTextBox.Text = _userSettings.TapX;
+            if (!string.IsNullOrWhiteSpace(_userSettings.TapY))
+                TapYTextBox.Text = _userSettings.TapY;
+        }
+        finally
+        {
+            _suppressViewModeSelectionChange = false;
+            _suppressSettingsPersistence = false;
+        }
+    }
+
+    private void PersistSettingsIfReady()
+    {
+        if (_suppressSettingsPersistence)
+            return;
+
+        SaveSettingsSafe();
+    }
+
+    private void SaveSettingsSafe()
+    {
+        try
+        {
+            GuiUserSettingsStore.Save(CaptureCurrentSettings());
+        }
+        catch
+        {
+            // Keep GUI usable even if the config path is unavailable or read-only.
+        }
+    }
+
+    private GuiUserSettings CaptureCurrentSettings()
+    {
+        var toolboxWidth = ToolboxPanel.IsVisible && MainContentGrid.ColumnDefinitions.Count >= 1
+            ? MainContentGrid.ColumnDefinitions[0].Width.Value
+            : _savedToolboxWidth.Value;
+        var outputHeight = OutputPanel.IsVisible && RootLayoutGrid.RowDefinitions.Count >= 4
+            ? RootLayoutGrid.RowDefinitions[3].Height.Value
+            : _savedOutputHeight.Value;
+
+        return new GuiUserSettings
+        {
+            Version = 1,
+            ResolutionIndex = ClampIndex(ResolutionCombo.SelectedIndex, ResolutionPresets.Length),
+            BitrateIndex = ClampIndex(BitrateCombo.SelectedIndex, BitratePresets.Length),
+            RenderFpsIndex = ClampIndex(RenderFpsCombo.SelectedIndex, RenderFpsPresets.Length),
+            ViewModeIndex = ClampIndex(ViewModeCombo.SelectedIndex, ViewModePresets.Length),
+            ToolsCategoryIndex = ClampIndex(ToolsCategoryCombo.SelectedIndex, ToolCategoryOptions.Length),
+            PreferredDeviceSerial = GetSelectedDeviceSerial(),
+            ShellCommandText = ShellCommandTextBox.Text,
+            InputText = InputTextTextBox.Text,
+            TapX = TapXTextBox.Text,
+            TapY = TapYTextBox.Text,
+            ToolboxWidth = toolboxWidth > 0 ? toolboxWidth : null,
+            OutputHeight = outputHeight > 0 ? outputHeight : null
+        };
     }
 
     private void ApplyToolsCategorySelection()
