@@ -1,60 +1,36 @@
 using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+// using declarations
 using AdbParser.Gui.Services;
 using System.Threading;
 using AdbParser.Core.Execution;
 using System.Threading.Tasks;
 using System.IO;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace AdbParser.Gui.ViewModels;
 
-public class MainWindowViewModel : INotifyPropertyChanged
+public partial class MainWindowViewModel : ObservableObject
 {
-    private string _status = "Ready";
-    private string _output = string.Empty;
-    private string _stats = string.Empty;
-    private string _footer = string.Empty;
-    private string _deviceStatus = string.Empty;
-    private string _frameInfo = string.Empty;
+    [ObservableProperty]
+    private string status = "Ready";
 
-    public string Status
-    {
-        get => _status;
-        private set => SetProperty(ref _status, value);
-    }
+    [ObservableProperty]
+    private string output = string.Empty;
 
-    public string Output
-    {
-        get => _output;
-        private set => SetProperty(ref _output, value);
-    }
+    [ObservableProperty]
+    private string stats = string.Empty;
 
-    public string Stats
-    {
-        get => _stats;
-        private set => SetProperty(ref _stats, value);
-    }
+    [ObservableProperty]
+    private string footer = string.Empty;
 
-    public string Footer
-    {
-        get => _footer;
-        private set => SetProperty(ref _footer, value);
-    }
+    [ObservableProperty]
+    private string deviceStatus = string.Empty;
 
-    public string DeviceStatus
-    {
-        get => _deviceStatus;
-        private set => SetProperty(ref _deviceStatus, value);
-    }
-
-    public string FrameInfo
-    {
-        get => _frameInfo;
-        private set => SetProperty(ref _frameInfo, value);
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
+    [ObservableProperty]
+    private string frameInfo = string.Empty;
 
     private readonly IAdbService _adbService;
     private readonly SemaphoreSlim _adbActionGate = new(1,1);
@@ -128,12 +104,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
         Output = string.Empty;
     }
 
-    private string _actionStatus = "Ready";
-    public string ActionStatus
-    {
-        get => _actionStatus;
-        private set => SetProperty(ref _actionStatus, value);
-    }
+    [ObservableProperty]
+    private string actionStatus = "Ready";
 
     public void SetActionStatus(string text)
     {
@@ -174,14 +146,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? name = null)
-    {
-        if (Equals(field, value))
-            return false;
-        field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-        return true;
-    }
+    // Property change notifications are handled by CommunityToolkit.Mvvm's ObservableObject
 
     private static string GetFirstLine(string? text)
     {
