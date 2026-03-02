@@ -1,24 +1,92 @@
 using System.Diagnostics;
 using AdbParser.Core.Registry;
+using System.Runtime.InteropServices;
+using System.IO;
 
 namespace AdbParser.Core.Execution;
 
 public static class AdbExecutor
 {
+    private static string? _cachedAdbPath;
+
+    private static string ResolveAdbPath()
+    {
+        if (!string.IsNullOrEmpty(_cachedAdbPath))
+            return _cachedAdbPath;
+
+        // Allow explicit override
+        var overridePath = Environment.GetEnvironmentVariable("ADB_PATH");
+        if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+        {
+            _cachedAdbPath = overridePath;
+            return _cachedAdbPath;
+        }
+
+        // Check Android SDK env vars
+        var sdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT")
+                      ?? Environment.GetEnvironmentVariable("ANDROID_HOME");
+        var candidates = new List<string>();
+        if (!string.IsNullOrEmpty(sdkRoot))
+        {
+            candidates.Add(Path.Combine(sdkRoot, "platform-tools", GetAdbName()));
+        }
+
+        // Common locations (Windows and Linux)
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrEmpty(localAppData))
+            candidates.Add(Path.Combine(localAppData, "Android", "sdk", "platform-tools", GetAdbName()));
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrEmpty(programFiles))
+            candidates.Add(Path.Combine(programFiles, "Android", "platform-tools", GetAdbName()));
+
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        if (!string.IsNullOrEmpty(programFilesX86))
+            candidates.Add(Path.Combine(programFilesX86, "Android", "platform-tools", GetAdbName()));
+
+        // Search PATH
+        var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var p in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                candidates.Add(Path.Combine(p.TrimEnd(Path.DirectorySeparatorChar), GetAdbName()));
+            }
+            catch
+            {
+                // ignore malformed path elements
+            }
+        }
+
+        foreach (var c in candidates)
+        {
+            if (string.IsNullOrEmpty(c))
+                continue;
+
+            if (File.Exists(c))
+            {
+                _cachedAdbPath = c;
+                return _cachedAdbPath;
+            }
+        }
+
+        // Not found
+        var msg = "adb executable not found. Install Android platform-tools and ensure 'adb' is on PATH, or set ANDROID_SDK_ROOT/ANDROID_HOME to the SDK root, or set ADB_PATH to the adb executable path.";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            msg += " On Linux you can usually install it as 'adb' via your package manager (e.g. apt install adb) or by installing Android SDK platform-tools.";
+
+        throw new FileNotFoundException(msg);
+    }
+
+    private static string GetAdbName()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return "adb.exe";
+        return "adb";
+    }
     public static async Task<AdbResult<object>> RunAsync(AdbCommand command, string? deviceSerial = null)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "adb",
-            Arguments = BuildArguments(
-                command.Command,
-                command.Arguments,
-                deviceSerial),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var psi = CreateProcessStartInfo(command.Command, command.Arguments, deviceSerial);
 
         var process = Process.Start(psi)
             ?? throw new Exception("Failed to start adb.");
@@ -52,18 +120,7 @@ public static class AdbExecutor
         string arguments = "",
         string? deviceSerial = null)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "adb",
-            Arguments = BuildArguments(
-                command,
-                arguments,
-                deviceSerial),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var psi = CreateProcessStartInfo(command, arguments, deviceSerial);
 
         var process = Process.Start(psi)
             ?? throw new Exception("Failed to start adb.");
@@ -93,23 +150,25 @@ public static class AdbExecutor
         string arguments = "",
         string? deviceSerial = null)
     {
-        var psi = new ProcessStartInfo
+        var psi = CreateProcessStartInfo(command, arguments, deviceSerial);
+        var process = Process.Start(psi)
+            ?? throw new Exception("Failed to start adb.");
+
+        return new AdbBinaryProcess(process);
+    }
+
+    private static ProcessStartInfo CreateProcessStartInfo(string command, string arguments, string? deviceSerial)
+    {
+        var adbPath = ResolveAdbPath();
+        return new ProcessStartInfo
         {
-            FileName = "adb",
-            Arguments = BuildArguments(
-                command,
-                arguments,
-                deviceSerial),
+            FileName = adbPath,
+            Arguments = BuildArguments(command, arguments, deviceSerial),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
-
-        var process = Process.Start(psi)
-            ?? throw new Exception("Failed to start adb.");
-
-        return new AdbBinaryProcess(process);
     }
 
     private static string BuildArguments(string command, string arguments, string? deviceSerial)
