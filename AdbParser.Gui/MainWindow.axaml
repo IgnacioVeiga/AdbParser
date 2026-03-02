@@ -1,6 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:AdbParser.Gui.ViewModels;assembly=AdbParser.Gui"
         x:Class="AdbParser.Gui.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
         Width="1320"
         Height="860"
         MinWidth="980"
@@ -139,7 +141,7 @@
         <Grid Grid.Row="1"
               ColumnDefinitions="*,Auto">
           <TextBlock x:Name="StatsText"
-                     Text="Decoded: 0 (0.0 fps) | Rendered: 0 (0.0 fps) | Frame: n/a | Render cap: Unlimited"
+                     Text="{Binding Stats}"
                      Foreground="#AFC2D4"
                      VerticalAlignment="Center"
                      TextTrimming="CharacterEllipsis"/>
@@ -147,7 +149,7 @@
                      Grid.Column="1"
                      Margin="12,0,0,0"
                      VerticalAlignment="Center"
-                     Text="Devices: unknown"
+                     Text="{Binding DeviceStatus}"
                      Foreground="#9EB3C7"
                      TextTrimming="CharacterEllipsis"/>
         </Grid>
@@ -505,7 +507,7 @@
                   CornerRadius="8"
                   Padding="10,5">
             <TextBlock x:Name="FrameInfoText"
-                       Text="No frame yet"
+                       Text="{Binding FrameInfo}"
                        Foreground="#EAF2F8"/>
           </Border>
 
@@ -552,7 +554,7 @@
           <TextBlock x:Name="ActionStatusText"
                      Grid.Column="1"
                      VerticalAlignment="Center"
-                     Text="Ready"
+                     Text="{Binding ActionStatus}"
                      Foreground="#9EB3C7"
                      TextTrimming="CharacterEllipsis"/>
           <Button x:Name="CopyOutputButton"
@@ -583,7 +585,7 @@
                    Foreground="#D7E2EE"
                    BorderThickness="0"
                    FontFamily="Consolas"
-                   Text="ADB GUI ready. Use the tools on the left and the mirror controls above."/>
+                   Text="{Binding Output}"/>
         </Border>
       </Grid>
     </Border>
@@ -595,7 +597,7 @@
             BorderThickness="0,1,0,0"
             Padding="12,8">
       <TextBlock x:Name="FooterText"
-                 Text="Settings apply on Start/Reconnect. Use lower bitrate or resolution if latency is high."
+                 Text="{Binding Footer}"
                  Foreground="#9EB3C7"
                  TextTrimming="CharacterEllipsis"/>
     </Border>

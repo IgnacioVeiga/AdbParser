@@ -1,4 +1,7 @@
 using Avalonia.Controls;
+using Avalonia;
+using Avalonia.Layout;
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -119,6 +122,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _statsTimer;
     private readonly List<DeviceChoice> _deviceChoices = [];
     private readonly GuiUserSettings _userSettings;
+    private readonly ViewModels.MainWindowViewModel _vm;
 
     private int _currentFrameWidth;
     private int _currentFrameHeight;
@@ -131,6 +135,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         _userSettings = GuiUserSettingsStore.LoadOrDefault();
         ApplyLoadedWindowPlacement();
+
+        _vm = new ViewModels.MainWindowViewModel();
+        DataContext = _vm;
 
         EnsureParsersRegistered();
         ConfigureControls();
@@ -840,6 +847,14 @@ public partial class MainWindow : Window
         {
             await operation();
         }
+        catch (FileNotFoundException fnf)
+        {
+            // Specific guidance when adb is not available on the system
+            if (!_isClosing)
+            {
+                await ShowAdbMissingDialogAsync(fnf.Message);
+            }
+        }
         catch (Exception ex)
         {
             if (!_isClosing)
@@ -874,6 +889,14 @@ public partial class MainWindow : Window
             AppendOutput(label, content);
             SetActionStatus($"{label} completed");
         }
+        catch (FileNotFoundException fnf)
+        {
+            // adb not found - show friendly dialog and append detailed info
+            var message = fnf.Message;
+            AppendOutput($"{label} ERROR", fnf.ToString());
+            SetActionStatus($"{label} failed: adb not found");
+            await ShowAdbMissingDialogAsync(message);
+        }
         catch (Exception ex)
         {
             var message = FirstLine(ex.Message);
@@ -885,6 +908,35 @@ public partial class MainWindow : Window
             _adbActionBusy = false;
             UpdateControlState();
             _adbActionGate.Release();
+        }
+    }
+
+    private async Task ShowAdbMissingDialogAsync(string message)
+    {
+        // Simpler fallback: append explanatory message to output, set status and try to open docs in browser.
+        try
+        {
+            AppendOutput("ADB missing", message + "\nInstall Android platform-tools or add adb to PATH. See developer.android.com/studio/releases/platform-tools");
+            SetStatus("ADB not found. See output for details.");
+
+            var url = "https://developer.android.com/studio/releases/platform-tools";
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+            }
+            catch
+            {
+                // ignore failure to open browser
+            }
+        }
+        catch
+        {
+            SetStatus($"ADB not found: {FirstLine(message)}");
         }
     }
 
@@ -1101,6 +1153,7 @@ public partial class MainWindow : Window
         OutputTextBox.Text = (OutputTextBox.Text ?? string.Empty) + block;
         OutputTextBox.CaretIndex = OutputTextBox.Text.Length;
         UpdateControlState();
+        _vm.AppendOutput(title, body);
     }
 
     private void ClearOutput()
@@ -1108,6 +1161,7 @@ public partial class MainWindow : Window
         OutputTextBox.Text = string.Empty;
         SetActionStatus("Output cleared");
         UpdateControlState();
+        _vm.ClearOutput();
     }
 
     private async Task CopyOutputToClipboardAsync()
@@ -1682,6 +1736,7 @@ public partial class MainWindow : Window
     private void SetStatus(string text)
     {
         StatusText.Text = $"Status: {text}";
+        _vm.SetStatus(text);
     }
 
     private static bool TryParseNonNegativeInt(string? text, out int value)
