@@ -1,14 +1,9 @@
 using System;
-// using declarations
 using AdbParser.Gui.Services;
-using System.Threading;
 using AdbParser.Core.Execution;
 using System.Threading.Tasks;
-using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 
 namespace AdbParser.Gui.ViewModels;
 
@@ -33,7 +28,6 @@ public partial class MainWindowViewModel : ObservableObject
     private string frameInfo = string.Empty;
 
     private readonly IAdbService _adbService;
-    private readonly SemaphoreSlim _adbActionGate = new(1,1);
 
     public MainWindowViewModel() : this(new AdbParser.Gui.Services.AdbService()) { }
 
@@ -99,7 +93,7 @@ public partial class MainWindowViewModel : ObservableObject
         return sb.ToString().TrimEnd();
     }
 
-    public void ClearOutput()
+    public void ClearOutputText()
     {
         Output = string.Empty;
     }
@@ -112,48 +106,11 @@ public partial class MainWindowViewModel : ObservableObject
         ActionStatus = text;
     }
 
-    public async Task RunAdbActionAsync(string label, Func<Task<string>> action)
-    {
-        if (!await _adbActionGate.WaitAsync(0))
-        {
-            SetActionStatus("Another ADB action is already running...");
-            return;
-        }
-
-        try
-        {
-            _ = Task.Run(() => { });
-            SetActionStatus($"{label} running...");
-            var content = await action();
-            AppendOutput(label, content);
-            SetActionStatus($"{label} completed");
-        }
-        catch (FileNotFoundException fnf)
-        {
-            AppendOutput($"{label} ERROR", fnf.ToString());
-            SetActionStatus($"{label} failed: adb not found");
-            // propagate or handle; here we append guidance
-            AppendOutput("ADB missing", fnf.Message + "\nInstall Android platform-tools or add adb to PATH.");
-        }
-        catch (Exception ex)
-        {
-            AppendOutput($"{label} ERROR", ex.ToString());
-            SetActionStatus($"{label} failed: {GetFirstLine(ex.Message)}");
-        }
-        finally
-        {
-            _adbActionGate.Release();
-        }
-    }
-
-    // Property change notifications are handled by CommunityToolkit.Mvvm's ObservableObject
-
-    private static string GetFirstLine(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return "Unknown error";
-
-        var newlineIndex = text.IndexOfAny(new[] { '\r', '\n' });
-        return newlineIndex >= 0 ? text[..newlineIndex] : text;
-    }
+    // Commands assigned by the view for operations that require direct window services.
+    public IAsyncRelayCommand? StartCommand { get; set; }
+    public IAsyncRelayCommand? StopCommand { get; set; }
+    public IAsyncRelayCommand? ReconnectCommand { get; set; }
+    public IRelayCommand? CopyOutputCommand { get; set; }
+    public IAsyncRelayCommand? SaveOutputCommand { get; set; }
+    public IRelayCommand? ExitFullscreenCommand { get; set; }
 }

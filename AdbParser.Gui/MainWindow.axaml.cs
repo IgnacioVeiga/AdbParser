@@ -18,6 +18,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AdbParser.Gui;
 
@@ -95,7 +96,6 @@ public partial class MainWindow : Window
 
     private bool _isStopping;
     private bool _isClosing;
-    private bool _adbActionBusy;
     private bool _suppressViewModeSelectionChange;
     private bool _suppressSettingsPersistence;
     private WindowState _windowStateBeforeFullscreen = WindowState.Normal;
@@ -110,7 +110,6 @@ public partial class MainWindow : Window
     private Avalonia.PixelPoint? _lastNormalWindowPosition;
 
     private readonly SemaphoreSlim _streamOpsGate = new(1, 1);
-    private readonly SemaphoreSlim _adbActionGate = new(1, 1);
 
     private long _decodedFrameCount;
     private long _renderedFrameCount;
@@ -137,6 +136,8 @@ public partial class MainWindow : Window
         ApplyLoadedWindowPlacement();
 
         _vm = new ViewModels.MainWindowViewModel();
+        WireViewModelCommands();
+        _vm.PropertyChanged += OnViewModelPropertyChanged;
         DataContext = _vm;
 
         EnsureParsersRegistered();
@@ -151,6 +152,34 @@ public partial class MainWindow : Window
         Closed += OnClosed;
         PositionChanged += (_, _) => CaptureNormalWindowPlacement();
         SizeChanged += (_, _) => CaptureNormalWindowPlacement();
+    }
+
+    private void WireViewModelCommands()
+    {
+        _vm.StartCommand = CreateStreamCommand(StartStreamingAsync);
+        _vm.StopCommand = CreateStreamCommand(() => StopStreamingAsync());
+        _vm.ReconnectCommand = CreateStreamCommand(ReconnectAsync);
+
+        _vm.ExitFullscreenCommand = new RelayCommand(ExitFullscreenOverlayView);
+
+        _vm.CopyOutputCommand = new AsyncRelayCommand(CopyOutputToClipboardAsync);
+        _vm.SaveOutputCommand = new AsyncRelayCommand(SaveOutputToFileAsync);
+        _vm.RefreshDevicesOutputAction = RefreshDevicesOutputAsync;
+        _vm.ScreenshotAction = RunScreenshotAsync;
+        _vm.RecordAction = RunRecord5sAsync;
+        _vm.OnAdbMissingAsync = ShowAdbMissingDialogAsync;
+        _vm.PersistSettingsAction = PersistSettingsIfReady;
+    }
+
+    private IAsyncRelayCommand CreateStreamCommand(Func<Task> action)
+        => new AsyncRelayCommand(() => RunStreamOpAsync(action));
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ViewModels.MainWindowViewModel.Output) or nameof(ViewModels.MainWindowViewModel.IsAdbActionBusy))
+        {
+            UpdateControlState();
+        }
     }
 
     private async void OnOpened(object? sender, EventArgs e)
@@ -168,6 +197,7 @@ public partial class MainWindow : Window
     private async void OnClosed(object? sender, EventArgs e)
     {
         _isClosing = true;
+        _vm.PropertyChanged -= OnViewModelPropertyChanged;
         SaveSettingsSafe();
         _statsTimer.Stop();
         await RunStreamOpAsync(() => StopStreamingAsync(windowClosing: true));
@@ -182,8 +212,6 @@ public partial class MainWindow : Window
             UpdateFooter();
             PersistSettingsIfReady();
         };
-        RefreshDevicesButton.Click += async (_, _) =>
-            await RunAdbActionAsync("Refresh devices", RefreshDevicesOutputAsync);
 
         ResolutionCombo.ItemsSource = Array.ConvertAll(ResolutionPresets, p => p.Label);
         BitrateCombo.ItemsSource = Array.ConvertAll(BitratePresets, p => p.Label);
@@ -196,10 +224,6 @@ public partial class MainWindow : Window
         RenderFpsCombo.SelectedIndex = 0; // Unlimited (lower latency)
         ViewModeCombo.SelectedIndex = 0;
         ToolsCategoryCombo.SelectedIndex = 0;
-
-        StartButton.Click += async (_, _) => await RunStreamOpAsync(StartStreamingAsync);
-        StopButton.Click += async (_, _) => await RunStreamOpAsync(() => StopStreamingAsync());
-        ReconnectButton.Click += async (_, _) => await RunStreamOpAsync(ReconnectAsync);
 
         ResolutionCombo.SelectionChanged += (_, _) =>
         {
@@ -228,56 +252,7 @@ public partial class MainWindow : Window
             PersistSettingsIfReady();
         };
 
-        DevicesButton.Click += async (_, _) => await RunAdbActionAsync("Devices", RefreshDevicesOutputAsync);
-        GetPropButton.Click += async (_, _) => await RunAdbActionAsync("GetProp", RunGetPropAsync);
-        PackagesButton.Click += async (_, _) => await RunAdbActionAsync("Packages", RunPackagesAsync);
-        BatteryButton.Click += async (_, _) => await RunAdbActionAsync("Battery", RunBatteryAsync);
-        ScreenshotButton.Click += async (_, _) => await RunAdbActionAsync("Screenshot", RunScreenshotAsync);
-        RecordButton.Click += async (_, _) => await RunAdbActionAsync("Record 5s", RunRecord5sAsync);
-        TopActivityButton.Click += async (_, _) => await RunAdbActionAsync("Top Activity", () => RunNamedShellCommandAsync("Top Activity", "dumpsys activity top"));
-        DisplayInfoButton.Click += async (_, _) => await RunAdbActionAsync("Display Info", () => RunNamedShellCommandAsync("Display Info", "dumpsys display"));
-
-        WmSizeButton.Click += async (_, _) => await RunAdbActionAsync("WM Size", () => RunNamedShellCommandAsync("WM Size", "wm size"));
-        WmDensityButton.Click += async (_, _) => await RunAdbActionAsync("WM Density", () => RunNamedShellCommandAsync("WM Density", "wm density"));
-        WindowInfoButton.Click += async (_, _) => await RunAdbActionAsync("Window Info", () => RunNamedShellCommandAsync("Window Info", "dumpsys window"));
-        RotationSettingsButton.Click += async (_, _) => await RunAdbActionAsync("Rotation Settings", RunRotationSettingsAsync);
-        RefreshRatesButton.Click += async (_, _) => await RunAdbActionAsync("Refresh Rates", RunRefreshRateSettingsAsync);
-        DisplayModesButton.Click += async (_, _) => await RunAdbActionAsync("Display Modes", RunDisplayModesAsync);
-
-        UserPackagesButton.Click += async (_, _) => await RunAdbActionAsync("User Packages", () => RunNamedShellCommandAsync("User Packages", "pm list packages -3"));
-        SystemPackagesButton.Click += async (_, _) => await RunAdbActionAsync("System Packages", () => RunNamedShellCommandAsync("System Packages", "pm list packages -s"));
-        MemInfoButton.Click += async (_, _) => await RunAdbActionAsync("MemInfo", () => RunNamedShellCommandAsync("MemInfo", "dumpsys meminfo"));
-        ActivityStackButton.Click += async (_, _) => await RunAdbActionAsync("Activities", () => RunNamedShellCommandAsync("Activities", "dumpsys activity activities"));
-        ProcessesButton.Click += async (_, _) => await RunAdbActionAsync("Processes", () => RunNamedShellCommandAsync("Processes", "ps -A"));
-        StorageButton.Click += async (_, _) => await RunAdbActionAsync("Storage", () => RunNamedShellCommandAsync("Storage", "df -h"));
-
-        HomeButton.Click += async (_, _) => await RunAdbActionAsync("Input Home", () => RunNamedShellCommandAsync("Input Home", "input keyevent KEYCODE_HOME"));
-        BackButton.Click += async (_, _) => await RunAdbActionAsync("Input Back", () => RunNamedShellCommandAsync("Input Back", "input keyevent KEYCODE_BACK"));
-        RecentsButton.Click += async (_, _) => await RunAdbActionAsync("Input Recents", () => RunNamedShellCommandAsync("Input Recents", "input keyevent KEYCODE_APP_SWITCH"));
-        PowerButton.Click += async (_, _) => await RunAdbActionAsync("Input Power", () => RunNamedShellCommandAsync("Input Power", "input keyevent KEYCODE_POWER"));
-        VolUpButton.Click += async (_, _) => await RunAdbActionAsync("Volume Up", () => RunNamedShellCommandAsync("Volume Up", "input keyevent KEYCODE_VOLUME_UP"));
-        VolDownButton.Click += async (_, _) => await RunAdbActionAsync("Volume Down", () => RunNamedShellCommandAsync("Volume Down", "input keyevent KEYCODE_VOLUME_DOWN"));
-        NotificationsButton.Click += async (_, _) => await RunAdbActionAsync("Notifications", () => RunNamedShellCommandAsync("Notifications", "cmd statusbar expand-notifications"));
-        QuickSettingsButton.Click += async (_, _) => await RunAdbActionAsync("Quick Settings", () => RunNamedShellCommandAsync("Quick Settings", "cmd statusbar expand-settings"));
-        ExitFullscreenButton.Click += (_, _) => ExitFullscreenOverlayView();
-
-        SendInputTextButton.Click += async (_, _) => await RunAdbActionAsync("Input Text", RunInputTextAsync);
-        TapCoordsButton.Click += async (_, _) => await RunAdbActionAsync("Input Tap", RunTapCoordinatesAsync);
-        TapCenterButton.Click += async (_, _) => await RunAdbActionAsync("Input Tap Center", RunTapCenterAsync);
-
-        RunShellButton.Click += async (_, _) => await RunAdbActionAsync("Shell", RunCustomShellAsync);
-        ShellDisplayQuickButton.Click += (_, _) =>
-            ShellCommandTextBox.Text = "dumpsys display";
-        ShellWindowQuickButton.Click += (_, _) =>
-            ShellCommandTextBox.Text = "dumpsys window";
-        ShellBatteryQuickButton.Click += (_, _) =>
-            ShellCommandTextBox.Text = "dumpsys battery";
-        ShellSurfaceQuickButton.Click += (_, _) =>
-            ShellCommandTextBox.Text = "dumpsys SurfaceFlinger";
         ShellCommandTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
-        CopyOutputButton.Click += async (_, _) => await CopyOutputToClipboardAsync();
-        SaveOutputButton.Click += async (_, _) => await SaveOutputToFileAsync();
-        ClearOutputButton.Click += (_, _) => ClearOutput();
         InputTextTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
         TapXTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
         TapYTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
@@ -286,9 +261,11 @@ public partial class MainWindow : Window
         ApplyLoadedSettings();
         ApplyToolsCategorySelection();
         ApplyMirrorViewMode();
-        FrameInfoText.Text = "No frame yet";
-        ActionStatusText.Text = "Ready";
-        DeviceStatusText.Text = "Devices: not loaded";
+        _vm.SetSelectedDevice(null, "Auto");
+        _vm.SetCurrentFrameSize(0, 0);
+        _vm.SetFrameInfo("No frame yet");
+        _vm.SetActionStatus("Ready");
+        _vm.SetDeviceStatus("Devices: not loaded");
         PreviewHintOverlay.IsVisible = true;
         SetStatus("Disconnected");
     }
@@ -363,7 +340,7 @@ public partial class MainWindow : Window
     private async Task<string> RefreshDevicesOutputAsync()
     {
         await RefreshDevicesListAsync(selectFirstOnline: false);
-        return await RunDevicesAsync();
+        return await _vm.GetDevicesOutputAsync();
     }
 
     private void UpdateDeviceStatus()
@@ -374,44 +351,8 @@ public partial class MainWindow : Window
         var total = _deviceChoices.Count - 1; // exclude auto
         var selected = GetSelectedDeviceLabel();
 
-        DeviceStatusText.Text = $"Devices: {online}/{total} online | Selected: {selected}";
-    }
-
-    private async Task<AdbResult<object>> RunSelectedDeviceCommandAsync(AdbCommand command)
-        => await AdbExecutor.RunAsync(command, GetSelectedDeviceSerial());
-
-    private async Task<string> RunNamedShellCommandAsync(string title, string shellCommand)
-    {
-        _ = title;
-        var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(shellCommand));
-        return $"$ adb {BuildDeviceSelectorPreview()}shell {shellCommand}\n\n" + FormatParsedResult(result);
-    }
-
-    private async Task<string> RunShellBatchAsync(params (string Label, string Command)[] commands)
-    {
-        var sb = new StringBuilder();
-
-        foreach (var (label, command) in commands)
-        {
-            sb.AppendLine($"## {label}");
-            try
-            {
-                sb.AppendLine(await RunNamedShellCommandAsync(label, command));
-            }
-            catch (Exception ex)
-            {
-                sb.AppendLine($"ERROR: {FirstLine(ex.Message)}");
-            }
-            sb.AppendLine();
-        }
-
-        return sb.ToString().TrimEnd();
-    }
-
-    private string BuildDeviceSelectorPreview()
-    {
-        var serial = GetSelectedDeviceSerial();
-        return string.IsNullOrWhiteSpace(serial) ? "" : $"-s {serial} ";
+        _vm.SetSelectedDevice(GetSelectedDeviceSerial(), selected);
+        _vm.SetDeviceStatus($"Devices: {online}/{total} online | Selected: {selected}");
     }
 
     private void InitializeControlGroups()
@@ -494,13 +435,13 @@ public partial class MainWindow : Window
             ToolsCategoryCombo.SelectedIndex = ClampIndex(_userSettings.ToolsCategoryIndex, ToolCategoryOptions.Length);
 
             if (!string.IsNullOrWhiteSpace(_userSettings.ShellCommandText))
-                ShellCommandTextBox.Text = _userSettings.ShellCommandText;
+                _vm.ShellCommandText = _userSettings.ShellCommandText;
             if (!string.IsNullOrWhiteSpace(_userSettings.InputText))
-                InputTextTextBox.Text = _userSettings.InputText;
+                _vm.InputText = _userSettings.InputText;
             if (!string.IsNullOrWhiteSpace(_userSettings.TapX))
-                TapXTextBox.Text = _userSettings.TapX;
+                _vm.TapX = _userSettings.TapX;
             if (!string.IsNullOrWhiteSpace(_userSettings.TapY))
-                TapYTextBox.Text = _userSettings.TapY;
+                _vm.TapY = _userSettings.TapY;
         }
         finally
         {
@@ -625,11 +566,11 @@ public partial class MainWindow : Window
             RenderFpsIndex = ClampIndex(RenderFpsCombo.SelectedIndex, RenderFpsPresets.Length),
             ViewModeIndex = ClampIndex(ViewModeCombo.SelectedIndex, ViewModePresets.Length),
             ToolsCategoryIndex = ClampIndex(ToolsCategoryCombo.SelectedIndex, ToolCategoryOptions.Length),
-            PreferredDeviceSerial = GetSelectedDeviceSerial(),
-            ShellCommandText = ShellCommandTextBox.Text,
-            InputText = InputTextTextBox.Text,
-            TapX = TapXTextBox.Text,
-            TapY = TapYTextBox.Text,
+            PreferredDeviceSerial = _vm.SelectedDeviceSerial,
+            ShellCommandText = _vm.ShellCommandText,
+            InputText = _vm.InputText,
+            TapX = _vm.TapX,
+            TapY = _vm.TapY,
             ToolboxWidth = toolboxWidth > 0 ? toolboxWidth : null,
             OutputHeight = outputHeight > 0 ? outputHeight : null,
             WindowWidth = _lastNormalWindowWidth > 320 ? _lastNormalWindowWidth : (double?)null,
@@ -868,55 +809,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RunAdbActionAsync(string label, Func<Task<string>> action)
-    {
-        if (_isClosing)
-            return;
-
-        if (!await _adbActionGate.WaitAsync(0))
-        {
-            SetActionStatus("Another ADB action is already running...");
-            return;
-        }
-
-        _adbActionBusy = true;
-        UpdateControlState();
-        SetActionStatus($"{label} running...");
-
-        try
-        {
-            var content = await action();
-            AppendOutput(label, content);
-            SetActionStatus($"{label} completed");
-        }
-        catch (FileNotFoundException fnf)
-        {
-            // adb not found - show friendly dialog and append detailed info
-            var message = fnf.Message;
-            AppendOutput($"{label} ERROR", fnf.ToString());
-            SetActionStatus($"{label} failed: adb not found");
-            await ShowAdbMissingDialogAsync(message);
-        }
-        catch (Exception ex)
-        {
-            var message = FirstLine(ex.Message);
-            AppendOutput($"{label} ERROR", ex.ToString());
-            SetActionStatus($"{label} failed: {message}");
-        }
-        finally
-        {
-            _adbActionBusy = false;
-            UpdateControlState();
-            _adbActionGate.Release();
-        }
-    }
-
-    private async Task ShowAdbMissingDialogAsync(string message)
+    private Task ShowAdbMissingDialogAsync(string message)
     {
         // Simpler fallback: append explanatory message to output, set status and try to open docs in browser.
         try
         {
-            AppendOutput("ADB missing", message + "\nInstall Android platform-tools or add adb to PATH. See developer.android.com/studio/releases/platform-tools");
+            _vm.AppendOutput("ADB missing", message + "\nInstall Android platform-tools or add adb to PATH. See developer.android.com/studio/releases/platform-tools");
             SetStatus("ADB not found. See output for details.");
 
             var url = "https://developer.android.com/studio/releases/platform-tools";
@@ -938,88 +836,8 @@ public partial class MainWindow : Window
         {
             SetStatus($"ADB not found: {FirstLine(message)}");
         }
-    }
 
-    private async Task<string> RunDevicesAsync()
-    {
-        var result = await AdbExecutor.RunAsync(AdbCommand.Devices());
-        return FormatParsedResult(result);
-    }
-
-    private async Task<string> RunGetPropAsync()
-    {
-        var result = await RunSelectedDeviceCommandAsync(AdbCommand.GetProp());
-        return FormatParsedResult(result);
-    }
-
-    private async Task<string> RunPackagesAsync()
-    {
-        var result = await RunSelectedDeviceCommandAsync(AdbCommand.ListPackages());
-        return FormatParsedResult(result);
-    }
-
-    private async Task<string> RunBatteryAsync()
-    {
-        var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell("dumpsys battery"));
-        return FormatParsedResult(result);
-    }
-
-    private async Task<string> RunCustomShellAsync()
-    {
-        var shellCommand = (ShellCommandTextBox.Text ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(shellCommand))
-            throw new InvalidOperationException("Shell command is empty.");
-
-        var result = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(shellCommand));
-        return $"$ adb {BuildDeviceSelectorPreview()}shell {shellCommand}\n\n" + FormatParsedResult(result);
-    }
-
-    private async Task<string> RunInputTextAsync()
-    {
-        var text = (InputTextTextBox.Text ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(text))
-            throw new InvalidOperationException("Input text is empty.");
-
-        var encodedText = EncodeAndroidInputText(text);
-        var command = $"input text \"{encodedText}\"";
-        _ = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(command));
-
-        return
-            $"Text sent to device.\n" +
-            $"Device: {GetSelectedDeviceLabel()}\n" +
-            $"Command: adb {BuildDeviceSelectorPreview()}shell {command}\n" +
-            $"Text: {text}";
-    }
-
-    private async Task<string> RunTapCoordinatesAsync()
-    {
-        if (!TryParseNonNegativeInt(TapXTextBox.Text, out var x))
-            throw new InvalidOperationException("Tap X must be a non-negative integer.");
-        if (!TryParseNonNegativeInt(TapYTextBox.Text, out var y))
-            throw new InvalidOperationException("Tap Y must be a non-negative integer.");
-
-        return await RunTapAsync(x, y, "Tap coordinates");
-    }
-
-    private async Task<string> RunTapCenterAsync()
-    {
-        if (_currentFrameWidth <= 0 || _currentFrameHeight <= 0)
-            throw new InvalidOperationException("No frame size available yet. Start mirror first.");
-
-        var x = _currentFrameWidth / 2;
-        var y = _currentFrameHeight / 2;
-        return await RunTapAsync(x, y, "Tap center");
-    }
-
-    private async Task<string> RunTapAsync(int x, int y, string label)
-    {
-        var command = $"input tap {x} {y}";
-        _ = await RunSelectedDeviceCommandAsync(AdbCommand.Shell(command));
-
-        return
-            $"{label} sent.\n" +
-            $"Device: {GetSelectedDeviceLabel()}\n" +
-            $"Command: adb {BuildDeviceSelectorPreview()}shell {command}";
+        return Task.CompletedTask;
     }
 
     private async Task<string> RunScreenshotAsync()
@@ -1077,96 +895,10 @@ public partial class MainWindow : Window
         return $"Recorded ~5s to {DescribeStorageFile(target)}\nDevice: {GetSelectedDeviceLabel()}";
     }
 
-    private Task<string> RunRefreshRateSettingsAsync()
-        => RunShellBatchAsync(
-            ("peak_refresh_rate", "settings get system peak_refresh_rate"),
-            ("min_refresh_rate", "settings get system min_refresh_rate"),
-            ("user_refresh_rate", "settings get system user_refresh_rate"),
-            ("fps_dev_override", "settings get system min_refresh_rate_for_video"));
-
-    private Task<string> RunRotationSettingsAsync()
-        => RunShellBatchAsync(
-            ("accelerometer_rotation", "settings get system accelerometer_rotation"),
-            ("user_rotation", "settings get system user_rotation"),
-            ("wm size", "wm size"));
-
-    private Task<string> RunDisplayModesAsync()
-        => RunShellBatchAsync(
-            ("dumpsys display", "dumpsys display"),
-            ("cmd display get-active-display-mode", "cmd display get-active-display-mode"),
-            ("cmd display get-displays", "cmd display get-displays"));
-
-    private string FormatParsedResult(AdbResult<object> result)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Parser: {result.ParserKey}");
-        sb.AppendLine();
-        sb.AppendLine("Data:");
-        sb.Append(FormatObject(result.Data));
-
-        if (!string.IsNullOrWhiteSpace(result.RawOutput))
-        {
-            sb.AppendLine();
-            sb.AppendLine();
-            sb.AppendLine("Raw output:");
-            sb.Append(result.RawOutput.TrimEnd());
-        }
-
-        return sb.ToString();
-    }
-
-    private static string FormatObject(object? data)
-    {
-        if (data is null)
-            return "(null)";
-
-        if (data is IEnumerable<string> strings)
-            return string.Join(Environment.NewLine, strings);
-
-        if (data is IReadOnlyDictionary<string, string> dict)
-        {
-            var sb = new StringBuilder();
-            foreach (var kv in dict.OrderBy(k => k.Key, StringComparer.Ordinal))
-            {
-                sb.AppendLine($"{kv.Key} = {kv.Value}");
-            }
-            return sb.ToString().TrimEnd();
-        }
-
-        if (data is System.Collections.IEnumerable enumerable and not string)
-        {
-            var sb = new StringBuilder();
-            foreach (var item in enumerable)
-            {
-                sb.AppendLine(item?.ToString());
-            }
-            return sb.ToString().TrimEnd();
-        }
-
-        return data.ToString() ?? "(null)";
-    }
-
-    private void AppendOutput(string title, string body)
-    {
-        var timestamp = DateTime.Now.ToString("HH:mm:ss");
-        var block = $"[{timestamp}] {title}\n{body.TrimEnd()}\n\n";
-        OutputTextBox.Text = (OutputTextBox.Text ?? string.Empty) + block;
-        OutputTextBox.CaretIndex = OutputTextBox.Text.Length;
-        UpdateControlState();
-        _vm.AppendOutput(title, body);
-    }
-
-    private void ClearOutput()
-    {
-        OutputTextBox.Text = string.Empty;
-        SetActionStatus("Output cleared");
-        UpdateControlState();
-        _vm.ClearOutput();
-    }
 
     private async Task CopyOutputToClipboardAsync()
     {
-        var text = OutputTextBox.Text ?? string.Empty;
+        var text = _vm.Output ?? string.Empty;
         if (string.IsNullOrWhiteSpace(text))
         {
             SetActionStatus("Output is empty");
@@ -1193,7 +925,7 @@ public partial class MainWindow : Window
 
     private async Task SaveOutputToFileAsync()
     {
-        var text = OutputTextBox.Text ?? string.Empty;
+        var text = _vm.Output ?? string.Empty;
         if (string.IsNullOrWhiteSpace(text))
         {
             SetActionStatus("Output is empty");
@@ -1230,7 +962,7 @@ public partial class MainWindow : Window
 
     private void SetActionStatus(string text)
     {
-        ActionStatusText.Text = text;
+        _vm.SetActionStatus(text);
     }
 
     private async Task<IStorageFile?> PickSaveFileAsync(
@@ -1423,7 +1155,8 @@ public partial class MainWindow : Window
 
                     _currentFrameWidth = frame.Width;
                     _currentFrameHeight = frame.Height;
-                    FrameInfoText.Text = $"{frame.Width}x{frame.Height} | {FormatBytes(frame.Data.Length)} BGRA";
+                    _vm.SetCurrentFrameSize(frame.Width, frame.Height);
+                    _vm.SetFrameInfo($"{frame.Width}x{frame.Height} | {FormatBytes(frame.Data.Length)} BGRA");
                     PreviewHintOverlay.IsVisible = false;
 
                     Interlocked.Increment(ref _renderedFrameCount);
@@ -1511,7 +1244,7 @@ public partial class MainWindow : Window
             _ = Dispatcher.UIThread.InvokeAsync(() =>
             {
                 SetStatus(message);
-                AppendOutput("Mirror error", message);
+                _vm.AppendOutput("Mirror error", message);
             });
         }
         catch
@@ -1578,7 +1311,8 @@ public partial class MainWindow : Window
 
         _currentFrameWidth = 0;
         _currentFrameHeight = 0;
-        FrameInfoText.Text = "Waiting for first frame...";
+        _vm.SetCurrentFrameSize(0, 0);
+        _vm.SetFrameInfo("Waiting for first frame...");
         PreviewHintOverlay.IsVisible = true;
         UpdateStatsText();
     }
@@ -1617,11 +1351,11 @@ public partial class MainWindow : Window
             : "n/a";
         var renderCapLabel = _renderFpsCap is > 0 ? _renderFpsCap.Value.ToString() : "Unlimited";
 
-        StatsText.Text =
+        _vm.SetStats(
             $"Decoded: {decoded} ({_decodedFps:0.0} fps) | " +
             $"Rendered: {rendered} ({_renderedFps:0.0} fps) | " +
             $"Frame: {frameSize} | " +
-            $"Render cap: {renderCapLabel}";
+            $"Render cap: {renderCapLabel}");
     }
 
     private void UpdateFooter()
@@ -1632,9 +1366,9 @@ public partial class MainWindow : Window
         var device = GetSelectedDeviceLabel();
         var viewMode = GetSelectedViewModeLabel();
 
-        FooterText.Text =
+        _vm.SetFooter(
             $"Device: {device} | View: {viewMode} | Preset: {res}, {bitrate}, render cap {renderCap}. " +
-            "Settings apply on Start/Reconnect. Lower bitrate/resolution if latency is high.";
+            "Settings apply on Start/Reconnect. Lower bitrate/resolution if latency is high.");
     }
 
     private void UpdateControlState()
@@ -1651,15 +1385,15 @@ public partial class MainWindow : Window
         BitrateCombo.IsEnabled = !running;
         RenderFpsCombo.IsEnabled = !running;
         ViewModeCombo.IsEnabled = true;
-        ToolsCategoryCombo.IsEnabled = !_adbActionBusy;
+        ToolsCategoryCombo.IsEnabled = !_vm.IsAdbActionBusy;
         ExitFullscreenButton.IsEnabled = true;
 
-        var actionControlsEnabled = !_adbActionBusy;
+        var actionControlsEnabled = !_vm.IsAdbActionBusy;
         foreach (var control in _adbActionControls)
         {
             control.IsEnabled = actionControlsEnabled;
         }
-        var hasOutputText = !string.IsNullOrWhiteSpace(OutputTextBox.Text);
+        var hasOutputText = !string.IsNullOrWhiteSpace(_vm.Output);
         CopyOutputButton.IsEnabled = hasOutputText;
         SaveOutputButton.IsEnabled = hasOutputText;
         ClearOutputButton.IsEnabled = hasOutputText;
@@ -1689,7 +1423,7 @@ public partial class MainWindow : Window
     }
 
     private bool StatusHasError()
-        => StatusText.Text?.Contains("error", StringComparison.OrdinalIgnoreCase) == true;
+        => (_vm.Status ?? string.Empty).Contains("error", StringComparison.OrdinalIgnoreCase);
 
     private void EnsureBitmap(VideoFrame frame)
     {
@@ -1735,51 +1469,7 @@ public partial class MainWindow : Window
 
     private void SetStatus(string text)
     {
-        StatusText.Text = $"Status: {text}";
         _vm.SetStatus(text);
-    }
-
-    private static bool TryParseNonNegativeInt(string? text, out int value)
-    {
-        if (int.TryParse(text, out value) && value >= 0)
-            return true;
-
-        value = 0;
-        return false;
-    }
-
-    private static string EncodeAndroidInputText(string text)
-    {
-        var sb = new StringBuilder(text.Length + 8);
-        foreach (var ch in text)
-        {
-            switch (ch)
-            {
-                case ' ':
-                    sb.Append("%s");
-                    break;
-                case '\\':
-                    sb.Append("\\\\");
-                    break;
-                case '"':
-                    sb.Append("\\\"");
-                    break;
-                case '$':
-                    sb.Append("\\$");
-                    break;
-                case '`':
-                    sb.Append("\\`");
-                    break;
-                case '%':
-                    sb.Append("\\%");
-                    break;
-                default:
-                    sb.Append(ch);
-                    break;
-            }
-        }
-
-        return sb.ToString();
     }
 
     private static int ClampIndex(int index, int length)

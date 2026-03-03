@@ -51,7 +51,9 @@
                 <Button x:Name="RefreshDevicesButton"
                         Grid.Column="1"
                         Content="Refresh"
-                        MinWidth="88"/>
+                        MinWidth="88"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="refresh-devices"/>
               </Grid>
             </Grid>
           </Border>
@@ -114,13 +116,16 @@
                             Spacing="8">
                   <Button x:Name="StartButton"
                           Content="Start"
-                          MinWidth="86"/>
+                          MinWidth="86"
+                          Command="{Binding StartCommand}"/>
                   <Button x:Name="StopButton"
                           Content="Stop"
-                          MinWidth="86"/>
+                          MinWidth="86"
+                          Command="{Binding StopCommand}"/>
                   <Button x:Name="ReconnectButton"
                           Content="Reconnect"
-                          MinWidth="106"/>
+                          MinWidth="106"
+                          Command="{Binding ReconnectCommand}"/>
                 </StackPanel>
 
                 <Grid ColumnDefinitions="Auto,*"
@@ -209,14 +214,14 @@
                          Orientation="Horizontal"
                          ItemWidth="136"
                          ItemHeight="36">
-                <Button x:Name="DevicesButton" Content="Devices" Margin="0,0,8,8"/>
-                <Button x:Name="GetPropButton" Content="GetProp" Margin="0,0,8,8"/>
-                <Button x:Name="BatteryButton" Content="Battery" Margin="0,0,8,8"/>
-                <Button x:Name="PackagesButton" Content="Packages" Margin="0,0,8,8"/>
-                <Button x:Name="ScreenshotButton" Content="Screenshot" Margin="0,0,8,8"/>
-                <Button x:Name="RecordButton" Content="Record 5s" Margin="0,0,8,8"/>
-                <Button x:Name="TopActivityButton" Content="Top Activity" Margin="0,0,8,8"/>
-                <Button x:Name="DisplayInfoButton" Content="Display Info" Margin="0,0,8,8"/>
+                <Button x:Name="DevicesButton" Content="Devices" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="devices"/>
+                <Button x:Name="GetPropButton" Content="GetProp" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="get-prop"/>
+                <Button x:Name="BatteryButton" Content="Battery" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="battery"/>
+                <Button x:Name="PackagesButton" Content="Packages" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="packages"/>
+                <Button x:Name="ScreenshotButton" Content="Screenshot" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="screenshot"/>
+                <Button x:Name="RecordButton" Content="Record 5s" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="record-5s"/>
+                <Button x:Name="TopActivityButton" Content="Top Activity" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="top-activity"/>
+                <Button x:Name="DisplayInfoButton" Content="Display Info" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="display-info"/>
               </WrapPanel>
             </ScrollViewer>
 
@@ -227,12 +232,12 @@
                          Orientation="Horizontal"
                          ItemWidth="136"
                          ItemHeight="36">
-                <Button x:Name="WmSizeButton" Content="WM Size" Margin="0,0,8,8"/>
-                <Button x:Name="WmDensityButton" Content="WM Density" Margin="0,0,8,8"/>
-                <Button x:Name="WindowInfoButton" Content="Window Info" Margin="0,0,8,8"/>
-                <Button x:Name="RotationSettingsButton" Content="Rotation" Margin="0,0,8,8"/>
-                <Button x:Name="RefreshRatesButton" Content="Refresh Rates" Margin="0,0,8,8"/>
-                <Button x:Name="DisplayModesButton" Content="Display Modes" Margin="0,0,8,8"/>
+                <Button x:Name="WmSizeButton" Content="WM Size" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="wm-size"/>
+                <Button x:Name="WmDensityButton" Content="WM Density" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="wm-density"/>
+                <Button x:Name="WindowInfoButton" Content="Window Info" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="window-info"/>
+                <Button x:Name="RotationSettingsButton" Content="Rotation" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="rotation-settings"/>
+                <Button x:Name="RefreshRatesButton" Content="Refresh Rates" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="refresh-rates"/>
+                <Button x:Name="DisplayModesButton" Content="Display Modes" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="display-modes"/>
               </WrapPanel>
             </ScrollViewer>
 
@@ -243,12 +248,12 @@
                          Orientation="Horizontal"
                          ItemWidth="136"
                          ItemHeight="36">
-                <Button x:Name="UserPackagesButton" Content="User Packages" Margin="0,0,8,8"/>
-                <Button x:Name="SystemPackagesButton" Content="System Packages" Margin="0,0,8,8"/>
-                <Button x:Name="MemInfoButton" Content="MemInfo" Margin="0,0,8,8"/>
-                <Button x:Name="ActivityStackButton" Content="Activities" Margin="0,0,8,8"/>
-                <Button x:Name="ProcessesButton" Content="Processes" Margin="0,0,8,8"/>
-                <Button x:Name="StorageButton" Content="Storage" Margin="0,0,8,8"/>
+                <Button x:Name="UserPackagesButton" Content="User Packages" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="user-packages"/>
+                <Button x:Name="SystemPackagesButton" Content="System Packages" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="system-packages"/>
+                <Button x:Name="MemInfoButton" Content="MemInfo" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="mem-info"/>
+                <Button x:Name="ActivityStackButton" Content="Activities" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="activity-stack"/>
+                <Button x:Name="ProcessesButton" Content="Processes" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="processes"/>
+                <Button x:Name="StorageButton" Content="Storage" Margin="0,0,8,8" Command="{Binding RunAdbActionCommand}" CommandParameter="storage"/>
               </WrapPanel>
             </ScrollViewer>
 
@@ -270,11 +275,13 @@
                           ColumnSpacing="8">
                       <TextBox x:Name="InputTextTextBox"
                                Watermark="Text to send (spaces supported)"
-                               Text="hello from adb gui"/>
+                               Text="{Binding InputText}"/>
                       <Button x:Name="SendInputTextButton"
                               Grid.Column="1"
                               Content="Send"
-                              MinWidth="72"/>
+                              MinWidth="72"
+                              Command="{Binding RunAdbActionCommand}"
+                              CommandParameter="send-input-text"/>
                     </Grid>
                     <TextBlock Text="Uses `adb shell input text` (best for simple text)."
                                Foreground="#9EB3C7"
@@ -296,21 +303,25 @@
                           ColumnSpacing="8">
                       <TextBox x:Name="TapXTextBox"
                                Watermark="X"
-                               Text="100"/>
+                               Text="{Binding TapX}"/>
                       <TextBox x:Name="TapYTextBox"
                                Grid.Column="1"
                                Watermark="Y"
-                               Text="100"/>
+                               Text="{Binding TapY}"/>
                       <Button x:Name="TapCoordsButton"
                               Grid.Column="2"
                               Content="Tap"
-                              MinWidth="64"/>
+                              MinWidth="64"
+                              Command="{Binding RunAdbActionCommand}"
+                              CommandParameter="tap-coords"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal"
                                 Spacing="8">
                       <Button x:Name="TapCenterButton"
                               Content="Tap center"
-                              MinWidth="96"/>
+                              MinWidth="96"
+                              Command="{Binding RunAdbActionCommand}"
+                              CommandParameter="tap-center"/>
                     </StackPanel>
                     <TextBlock Text="Tip: frame size is shown on the preview overlay."
                                Foreground="#9EB3C7"
@@ -330,11 +341,13 @@
                       ColumnSpacing="8">
                   <TextBox x:Name="ShellCommandTextBox"
                            Watermark="adb shell command (e.g. dumpsys display)"
-                           Text="dumpsys display"/>
+                           Text="{Binding ShellCommandText}"/>
                   <Button x:Name="RunShellButton"
                           Grid.Column="1"
                           Content="Run"
-                          MinWidth="72"/>
+                          MinWidth="72"
+                          Command="{Binding RunAdbActionCommand}"
+                          CommandParameter="run-shell"/>
                 </Grid>
 
                 <TextBlock Text="Quick fill"
@@ -343,10 +356,10 @@
                 <WrapPanel Orientation="Horizontal"
                            ItemWidth="136"
                            ItemHeight="36">
-                  <Button x:Name="ShellDisplayQuickButton" Content="dumpsys display" Margin="0,0,8,8"/>
-                  <Button x:Name="ShellWindowQuickButton" Content="dumpsys window" Margin="0,0,8,8"/>
-                  <Button x:Name="ShellBatteryQuickButton" Content="dumpsys battery" Margin="0,0,8,8"/>
-                  <Button x:Name="ShellSurfaceQuickButton" Content="SurfaceFlinger" Margin="0,0,8,8"/>
+                  <Button x:Name="ShellDisplayQuickButton" Content="dumpsys display" Margin="0,0,8,8" Command="{Binding SetShellPresetCommand}" CommandParameter="dumpsys display"/>
+                  <Button x:Name="ShellWindowQuickButton" Content="dumpsys window" Margin="0,0,8,8" Command="{Binding SetShellPresetCommand}" CommandParameter="dumpsys window"/>
+                  <Button x:Name="ShellBatteryQuickButton" Content="dumpsys battery" Margin="0,0,8,8" Command="{Binding SetShellPresetCommand}" CommandParameter="dumpsys battery"/>
+                  <Button x:Name="ShellSurfaceQuickButton" Content="SurfaceFlinger" Margin="0,0,8,8" Command="{Binding SetShellPresetCommand}" CommandParameter="dumpsys SurfaceFlinger"/>
                 </WrapPanel>
               </StackPanel>
             </ScrollViewer>
@@ -409,7 +422,8 @@
                   IsVisible="False">
             <Button x:Name="ExitFullscreenButton"
                     Content="Exit Fullscreen"
-                    MinWidth="124"/>
+                    MinWidth="124"
+                    Command="{Binding ExitFullscreenCommand}"/>
           </Border>
 
           <Border HorizontalAlignment="Right"
@@ -436,7 +450,9 @@
                         Width="36"
                         Height="36"
                         FontSize="15"
-                        ToolTip.Tip="Power"/>
+                        ToolTip.Tip="Power"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="power"/>
                 <Button x:Name="NotificationsButton"
                         Grid.Row="0"
                         Grid.Column="1"
@@ -444,7 +460,9 @@
                         Width="36"
                         Height="36"
                         FontSize="15"
-                        ToolTip.Tip="Notifications"/>
+                        ToolTip.Tip="Notifications"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="notifications"/>
 
                 <Button x:Name="HomeButton"
                         Grid.Row="1"
@@ -453,7 +471,9 @@
                         Width="36"
                         Height="36"
                         FontSize="16"
-                        ToolTip.Tip="Home"/>
+                        ToolTip.Tip="Home"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="home"/>
                 <Button x:Name="BackButton"
                         Grid.Row="1"
                         Grid.Column="1"
@@ -461,7 +481,9 @@
                         Width="36"
                         Height="36"
                         FontSize="16"
-                        ToolTip.Tip="Back"/>
+                        ToolTip.Tip="Back"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="back"/>
 
                 <Button x:Name="RecentsButton"
                         Grid.Row="2"
@@ -470,7 +492,9 @@
                         Width="36"
                         Height="36"
                         FontSize="15"
-                        ToolTip.Tip="Recents"/>
+                        ToolTip.Tip="Recents"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="recents"/>
                 <Button x:Name="QuickSettingsButton"
                         Grid.Row="2"
                         Grid.Column="1"
@@ -478,7 +502,9 @@
                         Width="36"
                         Height="36"
                         FontSize="15"
-                        ToolTip.Tip="Quick settings"/>
+                        ToolTip.Tip="Quick settings"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="quick-settings"/>
 
                 <Button x:Name="VolUpButton"
                         Grid.Row="3"
@@ -487,7 +513,9 @@
                         Width="36"
                         Height="36"
                         FontSize="16"
-                        ToolTip.Tip="Volume up"/>
+                        ToolTip.Tip="Volume up"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="vol-up"/>
                 <Button x:Name="VolDownButton"
                         Grid.Row="3"
                         Grid.Column="1"
@@ -495,7 +523,9 @@
                         Width="36"
                         Height="36"
                         FontSize="16"
-                        ToolTip.Tip="Volume down"/>
+                        ToolTip.Tip="Volume down"
+                        Command="{Binding RunAdbActionCommand}"
+                        CommandParameter="vol-down"/>
               </Grid>
             </StackPanel>
           </Border>
@@ -518,7 +548,7 @@
                   CornerRadius="8"
                   Padding="10,5">
             <TextBlock x:Name="StatusText"
-                       Text="Status: Disconnected"
+                       Text="{Binding Status}"
                        Foreground="#EAF2F8"/>
           </Border>
         </Grid>
@@ -560,15 +590,18 @@
           <Button x:Name="CopyOutputButton"
                   Grid.Column="2"
                   Content="Copy"
-                  MinWidth="76"/>
+                  MinWidth="76"
+                  Command="{Binding CopyOutputCommand}"/>
           <Button x:Name="SaveOutputButton"
                   Grid.Column="3"
                   Content="Save..."
-                  MinWidth="80"/>
+                  MinWidth="80"
+                  Command="{Binding SaveOutputCommand}"/>
           <Button x:Name="ClearOutputButton"
                   Grid.Column="4"
                   Content="Clear"
-                  MinWidth="72"/>
+                  MinWidth="72"
+                  Command="{Binding ClearOutputCommand}"/>
         </Grid>
 
         <Border Grid.Row="1"
