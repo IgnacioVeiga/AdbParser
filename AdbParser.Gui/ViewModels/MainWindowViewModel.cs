@@ -110,6 +110,9 @@ public partial class MainWindowViewModel : ObservableObject
     public IAsyncRelayCommand? StartCommand { get; set; }
     public IAsyncRelayCommand? StopCommand { get; set; }
     public IAsyncRelayCommand? ReconnectCommand { get; set; }
+    public IAsyncRelayCommand? BrowseAdbPathCommand { get; set; }
+    public IAsyncRelayCommand? BrowseFfmpegPathCommand { get; set; }
+    public IRelayCommand? ApplyBinaryPathsCommand { get; set; }
     public IRelayCommand? CopyOutputCommand { get; set; }
     public IAsyncRelayCommand? SaveOutputCommand { get; set; }
     public IRelayCommand? ExitFullscreenCommand { get; set; }

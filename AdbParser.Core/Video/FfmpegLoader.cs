@@ -6,6 +6,40 @@ namespace AdbParser.Core.Video;
 public static class FfmpegLoader
 {
     private static bool _loaded;
+    private static string? _configuredRootPath;
+
+    public static string? TryGetResolvedRootPath()
+    {
+        try
+        {
+            if (_loaded && !string.IsNullOrWhiteSpace(ffmpeg.RootPath))
+                return ffmpeg.RootPath;
+
+            Load();
+            return ffmpeg.RootPath;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static void SetRootPathOverride(string? rootPath)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath))
+        {
+            _configuredRootPath = null;
+            _loaded = false;
+            return;
+        }
+
+        var normalizedPath = NormalizeConfiguredRootPath(rootPath);
+        if (!Directory.Exists(normalizedPath))
+            throw new DirectoryNotFoundException($"Configured FFmpeg path was not found: {normalizedPath}");
+
+        _configuredRootPath = normalizedPath;
+        _loaded = false;
+    }
 
     public static void Load()
     {
@@ -13,6 +47,23 @@ public static class FfmpegLoader
             return;
 
         var tried = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_configuredRootPath))
+        {
+            if (!Directory.Exists(_configuredRootPath))
+                throw new DirectoryNotFoundException($"Configured FFmpeg path was not found: {_configuredRootPath}");
+
+            if (TryLoadFromDir(_configuredRootPath, tried))
+            {
+                ffmpeg.RootPath = _configuredRootPath;
+                _loaded = true;
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"Configured FFmpeg path does not contain required native libraries: {_configuredRootPath}\n" +
+                "Expected libraries include libavcodec, libavutil, and libswscale.");
+        }
 
         string[] envVars = ["FFMPEG_ROOT", "FFMPEG_ROOT_PATH", "FFMPEG_HOME", "FFMPEG_BIN", "FFMPEG_DIR"];
         foreach (var ev in envVars)
@@ -128,6 +179,18 @@ public static class FfmpegLoader
             "Paths checked: " + string.Join(", ", tried.Take(20)) + "\n" +
             "Solution: Install FFmpeg on your system (e.g. 'sudo apt install ffmpeg libavcodec-dev' on Debian/Ubuntu) " +
             "or set the FFMPEG_ROOT environment variable pointing to the directory containing the libraries.");
+    }
+
+    private static string NormalizeConfiguredRootPath(string rootPath)
+    {
+        var candidate = rootPath.Trim().Trim('"');
+        if (File.Exists(candidate))
+        {
+            candidate = Path.GetDirectoryName(candidate)
+                ?? throw new InvalidOperationException("The configured FFmpeg file path has no parent directory.");
+        }
+
+        return Path.GetFullPath(candidate);
     }
 
     private static bool TryLoadFromDir(string dir, List<string> tried)

@@ -141,6 +141,63 @@
               </StackPanel>
             </Grid>
           </Border>
+
+          <Border Margin="4"
+                  MinWidth="520"
+                  Background="#101722"
+                  BorderBrush="#273644"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="10">
+            <Grid RowDefinitions="Auto,Auto,Auto"
+                  RowSpacing="8">
+              <TextBlock Text="Binary Paths"
+                         Foreground="#DCE7F3"
+                         FontWeight="SemiBold"
+                         FontSize="12"/>
+
+              <Grid Grid.Row="1"
+                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="8">
+                <TextBlock Text="ADB"
+                           Foreground="#9EB3C7"
+                           VerticalAlignment="Center"
+                           FontSize="12"/>
+                <TextBox x:Name="AdbPathTextBox"
+                         Grid.Column="1"
+                         Watermark="Path to adb executable or platform-tools folder"
+                         Text="{Binding AdbPathOverride}"/>
+                <Button x:Name="BrowseAdbPathButton"
+                        Grid.Column="2"
+                        Content="Browse..."
+                        MinWidth="88"
+                        Command="{Binding BrowseAdbPathCommand}"/>
+              </Grid>
+
+              <Grid Grid.Row="2"
+                    ColumnDefinitions="Auto,*,Auto,Auto"
+                    ColumnSpacing="8">
+                <TextBlock Text="FFmpeg"
+                           Foreground="#9EB3C7"
+                           VerticalAlignment="Center"
+                           FontSize="12"/>
+                <TextBox x:Name="FfmpegPathTextBox"
+                         Grid.Column="1"
+                         Watermark="Path to FFmpeg libs/bin folder"
+                         Text="{Binding FfmpegPathOverride}"/>
+                <Button x:Name="BrowseFfmpegPathButton"
+                        Grid.Column="2"
+                        Content="Browse..."
+                        MinWidth="88"
+                        Command="{Binding BrowseFfmpegPathCommand}"/>
+                <Button x:Name="ApplyPathsButton"
+                        Grid.Column="3"
+                        Content="Apply"
+                        MinWidth="72"
+                        Command="{Binding ApplyBinaryPathsCommand}"/>
+              </Grid>
+            </Grid>
+          </Border>
         </WrapPanel>
 
         <Grid Grid.Row="1"

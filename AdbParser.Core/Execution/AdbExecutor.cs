@@ -8,11 +8,53 @@ namespace AdbParser.Core.Execution;
 public static class AdbExecutor
 {
     private static string? _cachedAdbPath;
+    private static string? _configuredAdbPath;
+
+    public static string? TryGetResolvedAdbPath()
+    {
+        try
+        {
+            return ResolveAdbPath();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static void SetAdbPathOverride(string? adbPath)
+    {
+        _cachedAdbPath = null;
+
+        if (string.IsNullOrWhiteSpace(adbPath))
+        {
+            _configuredAdbPath = null;
+            return;
+        }
+
+        var normalizedPath = NormalizeConfiguredAdbPath(adbPath);
+        if (!File.Exists(normalizedPath))
+            throw new FileNotFoundException($"Configured adb path was not found: {normalizedPath}");
+
+        _configuredAdbPath = normalizedPath;
+        _cachedAdbPath = normalizedPath;
+    }
 
     private static string ResolveAdbPath()
     {
         if (!string.IsNullOrEmpty(_cachedAdbPath))
             return _cachedAdbPath;
+
+        if (!string.IsNullOrWhiteSpace(_configuredAdbPath))
+        {
+            if (File.Exists(_configuredAdbPath))
+            {
+                _cachedAdbPath = _configuredAdbPath;
+                return _cachedAdbPath;
+            }
+
+            throw new FileNotFoundException($"Configured adb path was not found: {_configuredAdbPath}");
+        }
 
         // Allow explicit override
         var overridePath = Environment.GetEnvironmentVariable("ADB_PATH");
@@ -76,6 +118,15 @@ public static class AdbExecutor
             msg += " On Linux you can usually install it as 'adb' via your package manager (e.g. apt install adb) or by installing Android SDK platform-tools.";
 
         throw new FileNotFoundException(msg);
+    }
+
+    private static string NormalizeConfiguredAdbPath(string adbPath)
+    {
+        var candidate = adbPath.Trim().Trim('"');
+        if (Directory.Exists(candidate))
+            candidate = Path.Combine(candidate, GetAdbName());
+
+        return Path.GetFullPath(candidate);
     }
 
     private static string GetAdbName()

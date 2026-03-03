@@ -37,6 +37,12 @@ public partial class MainWindowViewModel
     private string tapY = "100";
 
     [ObservableProperty]
+    private string adbPathOverride = string.Empty;
+
+    [ObservableProperty]
+    private string ffmpegPathOverride = string.Empty;
+
+    [ObservableProperty]
     private int currentFrameWidth;
 
     [ObservableProperty]

@@ -159,6 +159,9 @@ public partial class MainWindow : Window
         _vm.StartCommand = CreateStreamCommand(StartStreamingAsync);
         _vm.StopCommand = CreateStreamCommand(() => StopStreamingAsync());
         _vm.ReconnectCommand = CreateStreamCommand(ReconnectAsync);
+        _vm.BrowseAdbPathCommand = new AsyncRelayCommand(BrowseAdbPathAsync);
+        _vm.BrowseFfmpegPathCommand = new AsyncRelayCommand(BrowseFfmpegPathAsync);
+        _vm.ApplyBinaryPathsCommand = new RelayCommand(() => ApplyBinaryPathOverrides(updateActionStatus: true));
 
         _vm.ExitFullscreenCommand = new RelayCommand(ExitFullscreenOverlayView);
 
@@ -256,9 +259,20 @@ public partial class MainWindow : Window
         InputTextTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
         TapXTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
         TapYTextBox.LostFocus += (_, _) => PersistSettingsIfReady();
+        AdbPathTextBox.LostFocus += (_, _) =>
+        {
+            ApplyBinaryPathOverrides(updateActionStatus: true);
+            PersistSettingsIfReady();
+        };
+        FfmpegPathTextBox.LostFocus += (_, _) =>
+        {
+            ApplyBinaryPathOverrides(updateActionStatus: true);
+            PersistSettingsIfReady();
+        };
 
         InitializeControlGroups();
         ApplyLoadedSettings();
+        ApplyBinaryPathOverrides(updateActionStatus: false);
         ApplyToolsCategorySelection();
         ApplyMirrorViewMode();
         _vm.SetSelectedDevice(null, "Auto");
@@ -370,6 +384,11 @@ public partial class MainWindow : Window
         [
             DeviceCombo,
             RefreshDevicesButton,
+            AdbPathTextBox,
+            BrowseAdbPathButton,
+            FfmpegPathTextBox,
+            BrowseFfmpegPathButton,
+            ApplyPathsButton,
             DevicesButton,
             GetPropButton,
             PackagesButton,
@@ -442,6 +461,10 @@ public partial class MainWindow : Window
                 _vm.TapX = _userSettings.TapX;
             if (!string.IsNullOrWhiteSpace(_userSettings.TapY))
                 _vm.TapY = _userSettings.TapY;
+            if (!string.IsNullOrWhiteSpace(_userSettings.AdbPathOverride))
+                _vm.AdbPathOverride = _userSettings.AdbPathOverride;
+            if (!string.IsNullOrWhiteSpace(_userSettings.FfmpegPathOverride))
+                _vm.FfmpegPathOverride = _userSettings.FfmpegPathOverride;
         }
         finally
         {
@@ -571,6 +594,8 @@ public partial class MainWindow : Window
             InputText = _vm.InputText,
             TapX = _vm.TapX,
             TapY = _vm.TapY,
+            AdbPathOverride = _vm.AdbPathOverride,
+            FfmpegPathOverride = _vm.FfmpegPathOverride,
             ToolboxWidth = toolboxWidth > 0 ? toolboxWidth : null,
             OutputHeight = outputHeight > 0 ? outputHeight : null,
             WindowWidth = _lastNormalWindowWidth > 320 ? _lastNormalWindowWidth : (double?)null,
@@ -814,7 +839,12 @@ public partial class MainWindow : Window
         // Simpler fallback: append explanatory message to output, set status and try to open docs in browser.
         try
         {
-            _vm.AppendOutput("ADB missing", message + "\nInstall Android platform-tools or add adb to PATH. See developer.android.com/studio/releases/platform-tools");
+            _vm.AppendOutput(
+                "ADB missing",
+                message +
+                "\nInstall Android platform-tools or add adb to PATH. " +
+                "You can also configure it from the Binary Paths panel in this window. " +
+                "See developer.android.com/studio/releases/platform-tools");
             SetStatus("ADB not found. See output for details.");
 
             var url = "https://developer.android.com/studio/releases/platform-tools";
@@ -965,6 +995,104 @@ public partial class MainWindow : Window
         _vm.SetActionStatus(text);
     }
 
+    private void ApplyBinaryPathOverrides(bool updateActionStatus)
+    {
+        try
+        {
+            AdbExecutor.SetAdbPathOverride(_vm.AdbPathOverride);
+            FfmpegLoader.SetRootPathOverride(_vm.FfmpegPathOverride);
+            RefreshDetectedBinaryPaths();
+
+            if (updateActionStatus)
+                SetActionStatus("Binary paths applied");
+        }
+        catch (Exception ex)
+        {
+            RefreshDetectedBinaryPaths();
+            if (updateActionStatus)
+                SetActionStatus($"Path config error: {FirstLine(ex.Message)}");
+        }
+    }
+
+    private void RefreshDetectedBinaryPaths()
+    {
+        var resolvedAdbPath = AdbExecutor.TryGetResolvedAdbPath();
+        if (!string.IsNullOrWhiteSpace(resolvedAdbPath))
+            _vm.AdbPathOverride = resolvedAdbPath;
+
+        var resolvedFfmpegPath = FfmpegLoader.TryGetResolvedRootPath();
+        if (!string.IsNullOrWhiteSpace(resolvedFfmpegPath))
+            _vm.FfmpegPathOverride = resolvedFfmpegPath;
+    }
+
+    private async Task BrowseAdbPathAsync()
+    {
+        try
+        {
+            var selected = await PickOpenFileAsync(
+                title: "Select adb executable",
+                [
+                    new FilePickerFileType("adb executable")
+                    {
+                        Patterns = OperatingSystem.IsWindows() ? ["adb.exe"] : ["adb"]
+                    },
+                    new FilePickerFileType("Executable files")
+                    {
+                        Patterns = OperatingSystem.IsWindows() ? ["*.exe"] : ["*"]
+                    }
+                ]);
+
+            if (selected is null)
+            {
+                SetActionStatus("ADB path selection canceled");
+                return;
+            }
+
+            var localPath = selected.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(localPath))
+            {
+                SetActionStatus("Selected ADB path is not a local file");
+                return;
+            }
+
+            _vm.AdbPathOverride = localPath;
+            ApplyBinaryPathOverrides(updateActionStatus: true);
+            PersistSettingsIfReady();
+        }
+        catch (Exception ex)
+        {
+            SetActionStatus($"ADB path selection failed: {FirstLine(ex.Message)}");
+        }
+    }
+
+    private async Task BrowseFfmpegPathAsync()
+    {
+        try
+        {
+            var selected = await PickFolderAsync("Select FFmpeg directory");
+            if (selected is null)
+            {
+                SetActionStatus("FFmpeg path selection canceled");
+                return;
+            }
+
+            var localPath = selected.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(localPath))
+            {
+                SetActionStatus("Selected FFmpeg path is not a local directory");
+                return;
+            }
+
+            _vm.FfmpegPathOverride = localPath;
+            ApplyBinaryPathOverrides(updateActionStatus: true);
+            PersistSettingsIfReady();
+        }
+        catch (Exception ex)
+        {
+            SetActionStatus($"FFmpeg path selection failed: {FirstLine(ex.Message)}");
+        }
+    }
+
     private async Task<IStorageFile?> PickSaveFileAsync(
         string title,
         string suggestedFileName,
@@ -985,6 +1113,39 @@ public partial class MainWindow : Window
         });
     }
 
+    private async Task<IStorageFile?> PickOpenFileAsync(
+        string title,
+        IReadOnlyList<FilePickerFileType>? fileTypes = null)
+    {
+        var storage = StorageProvider;
+        if (storage is null)
+            throw new InvalidOperationException("Storage provider is not available in this window.");
+
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = fileTypes
+        });
+
+        return files.FirstOrDefault();
+    }
+
+    private async Task<IStorageFolder?> PickFolderAsync(string title)
+    {
+        var storage = StorageProvider;
+        if (storage is null)
+            throw new InvalidOperationException("Storage provider is not available in this window.");
+
+        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false
+        });
+
+        return folders.FirstOrDefault();
+    }
+
     private static string DescribeStorageFile(IStorageFile file)
         => file.TryGetLocalPath() ?? file.Name;
 
@@ -1001,6 +1162,8 @@ public partial class MainWindow : Window
 
         // Clean up any previous canceled/stopped session state.
         await StopStreamingAsync();
+
+        ApplyBinaryPathOverrides(updateActionStatus: false);
 
         var options = BuildScreenStreamOptions();
         _renderFpsCap = GetSelectedRenderFpsCap();
@@ -1020,6 +1183,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             SetStatus($"FFmpeg error: {FirstLine(ex.Message)}");
+            _vm.AppendOutput("FFmpeg error", ex.ToString() + "\nTip: configure FFmpeg path from the Binary Paths panel.");
             Title = "ADB Screen Test - Error";
             UpdateControlState();
             return;

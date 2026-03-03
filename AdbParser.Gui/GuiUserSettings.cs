@@ -16,6 +16,8 @@ public sealed class GuiUserSettings
     public string? InputText { get; set; }
     public string? TapX { get; set; }
     public string? TapY { get; set; }
+    public string? AdbPathOverride { get; set; }
+    public string? FfmpegPathOverride { get; set; }
 
     public double? ToolboxWidth { get; set; }
     public double? OutputHeight { get; set; }
